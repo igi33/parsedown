@@ -40,6 +40,7 @@ class Parsedown
 
     protected $odt;
     protected $odtTextStyles;
+    protected $odtParagraphStyles;
     protected $odtListStyles;
     protected $p;
     protected $list;
@@ -55,66 +56,87 @@ class Parsedown
         {
             $this->odt = ODT::getInstance();
             $this->odtTextStyles = [];
+            $this->odtParagraphStyles = [];
             $this->odtListStyles = [];
             $this->odtFinishedListItems = [];
             
-            $boldText = new TextStyle('bold');
-            $boldText->setBold();
-            $boldText->setFontSize($this->fontSize);
-            $this->odtTextStyles['bold'] = $boldText;
+            $boldTextStyle = new TextStyle('bold');
+            $boldTextStyle->setBold();
+            $boldTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$boldTextStyle->getStyleName()] = $boldTextStyle;
             
-            $italicText = new TextStyle('italic');
-            $italicText->setItalic();
-            $italicText->setFontSize($this->fontSize);
-            $this->odtTextStyles['italic'] = $italicText;
+            $italicTextStyle = new TextStyle('italic');
+            $italicTextStyle->setItalic();
+            $italicTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$italicTextStyle->getStyleName()] = $italicTextStyle;
 
-            $underlineText = new TextStyle('underline');
-            $underlineText->setTextUnderline();
-            $underlineText->setFontSize($this->fontSize);
-            $this->odtTextStyles['underline'] = $underlineText;
+            $underlineTextStyle = new TextStyle('underline');
+            $underlineTextStyle->setTextUnderline();
+            $underlineTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$underlineTextStyle->getStyleName()] = $underlineTextStyle;
             
-            $boldItalicText = new TextStyle('bold_italic');
-            $boldItalicText->setBold();
-            $boldItalicText->setItalic();
-            $boldItalicText->setFontSize($this->fontSize);
-            $this->odtTextStyles['bold_italic'] = $boldItalicText;
+            $boldItalicTextStyle = new TextStyle('bold_italic');
+            $boldItalicTextStyle->setBold();
+            $boldItalicTextStyle->setItalic();
+            $boldItalicTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$boldItalicTextStyle->getStyleName()] = $boldItalicTextStyle;
 
-            $boldUnderlineText = new TextStyle('bold_underline');
-            $boldUnderlineText->setBold();
-            $boldUnderlineText->setTextUnderline();
-            $boldUnderlineText->setFontSize($this->fontSize);
-            $this->odtTextStyles['bold_underline'] = $boldUnderlineText;
+            $boldUnderlineTextStyle = new TextStyle('bold_underline');
+            $boldUnderlineTextStyle->setBold();
+            $boldUnderlineTextStyle->setTextUnderline();
+            $boldUnderlineTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$boldUnderlineTextStyle->getStyleName()] = $boldUnderlineTextStyle;
 
-            $italicUnderlineText = new TextStyle('italic_underline');
-            $italicUnderlineText->setItalic();
-            $italicUnderlineText->setTextUnderline();
-            $italicUnderlineText->setFontSize($this->fontSize);
-            $this->odtTextStyles['italic_underline'] = $italicUnderlineText;
+            $italicUnderlineTextStyle = new TextStyle('italic_underline');
+            $italicUnderlineTextStyle->setItalic();
+            $italicUnderlineTextStyle->setTextUnderline();
+            $italicUnderlineTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$italicUnderlineTextStyle->getStyleName()] = $italicUnderlineTextStyle;
             
-            $boldItalicUnderlineText = new TextStyle('bold_italic_underline');
-            $boldItalicUnderlineText->setBold();
-            $boldItalicUnderlineText->setItalic();
-            $boldItalicUnderlineText->setTextUnderline();
-            $boldItalicUnderlineText->setFontSize($this->fontSize);
-            $this->odtTextStyles['bold_italic_underline'] = $boldItalicUnderlineText;
+            $boldItalicUnderlineTextStyle = new TextStyle('bold_italic_underline');
+            $boldItalicUnderlineTextStyle->setBold();
+            $boldItalicUnderlineTextStyle->setItalic();
+            $boldItalicUnderlineTextStyle->setTextUnderline();
+            $boldItalicUnderlineTextStyle->setFontSize($this->fontSize);
+            $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
+
+            $heading1 = new ParagraphStyle('h1');
+            $heading1->setTextAlign(StyleConstants::CENTER);
+            $heading1->setVerticalMargin('0.2cm', '0.2cm');
+            $this->odtParagraphStyles[$heading1->getStyleName()] = $heading1;
+
+            $heading2 = new ParagraphStyle('h2');
+            $heading2->setTextAlign(StyleConstants::CENTER);
+            $heading2->setVerticalMargin('0.2cm', '0cm');
+            $this->odtParagraphStyles[$heading2->getStyleName()] = $heading2;
+
+            $heading3 = new ParagraphStyle('h3');
+            $heading3->setTextAlign(StyleConstants::CENTER);
+            $heading3->setVerticalMargin('0cm', '0cm');
+            $this->odtParagraphStyles[$heading3->getStyleName()] = $heading3;
+
+            $heading4 = new ParagraphStyle('h4');
+            $heading4->setTextAlign(StyleConstants::CENTER);
+            $heading4->setVerticalMargin('0cm', '0.2cm');
+            $this->odtParagraphStyles[$heading4->getStyleName()] = $heading4;
 
             $romanList = new ListStyle('roman');
-            $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldText);
-            $romanList->setNumberLevel(2, new NumberFormat('', '', 'I'), $boldText);
-            $romanList->setNumberLevel(3, new NumberFormat('', '', 'I'), $boldText);
-            $this->odtListStyles['roman'] = $romanList;
+            $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldTextStyle);
+            $romanList->setNumberLevel(2, new NumberFormat('', '', 'I'), $boldTextStyle);
+            $romanList->setNumberLevel(3, new NumberFormat('', '', 'I'), $boldTextStyle);
+            $this->odtListStyles[$romanList->getStyleName()] = $romanList;
 
             $decimalList = new ListStyle('decimal');
-            $decimalList->setNumberLevel(1, new NumberFormat('', '.', '1'), $boldText);
-            $decimalList->setNumberLevel(2, new NumberFormat('', '.', '1'), $boldText);
-            $decimalList->setNumberLevel(3, new NumberFormat('', '.', '1'), $boldText);
-            $this->odtListStyles['decimal'] = $decimalList;
+            $decimalList->setNumberLevel(1, new NumberFormat('', '.', '1'), $boldTextStyle);
+            $decimalList->setNumberLevel(2, new NumberFormat('', '.', '1'), $boldTextStyle);
+            $decimalList->setNumberLevel(3, new NumberFormat('', '.', '1'), $boldTextStyle);
+            $this->odtListStyles[$decimalList->getStyleName()] = $decimalList;
 
             $bulletList = new ListStyle('bullet');
             $bulletList->setBulletLevel(1, StyleConstants::BULLET);
             $bulletList->setBulletLevel(2, StyleConstants::BULLET);
             $bulletList->setBulletLevel(3, StyleConstants::BULLET);
-            $this->odtListStyles['bullet'] = $bulletList;
+            $this->odtListStyles[$bulletList->getStyleName()] = $bulletList;
         }
         elseif ($this->outputMode == self::TYPE_DOCX)
         {
@@ -2004,7 +2026,25 @@ class Parsedown
                     $options = [];
                     if (isset($Element['attributes']['alt']) && $Element['attributes']['alt'])
                     {
-                        $options['height'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($Element['attributes']['alt']);
+                        $altArgs = explode(',',$Element['attributes']['alt']);
+                        $countArgs = count($altArgs);
+                        $height = 0;
+                        $width = 0;
+                        if ($countArgs >= 2)
+                        {
+                            $height = $altArgs[0];
+                            $width = $altArgs[1];
+                        }
+                        elseif ($countArgs == 1)
+                        {
+                            $height = $altArgs[0];
+                        }
+                        $options['height'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($height);
+                        if ($width)
+                        {
+                            $options['width'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($width);
+                        }
+                        
                     }
                     $this->section->addImage($Element['attributes']['src'], $options);
                 }
@@ -2027,13 +2067,13 @@ class Parsedown
             }
             elseif ($Element['name'] == 'ol')
             {
-                $this->lastListStyleName = $this->listStyleName;
+                $parentListStyle = $this->listStyleName;
                 $this->listDepth += 1;
                 $this->listStyleName = 'roman';
             }
             elseif ($Element['name'] == 'ul')
             {
-                $this->lastListStyleName = $this->listStyleName;
+                $parentListStyle = $this->listStyleName;
                 $this->listDepth += 1;
                 $this->listStyleName = 'bullet';
             }
@@ -2067,7 +2107,7 @@ class Parsedown
             $text = $Element['text'];
         }
 
-        /*
+        
         // very strongly consider an alternative if you're writing an
         // extension
         elseif (isset($Element['rawHtml']))
@@ -2077,7 +2117,7 @@ class Parsedown
             $allowRawHtmlInSafeMode = isset($Element['allowRawHtmlInSafeMode']) && $Element['allowRawHtmlInSafeMode'];
             $permitRawHtml = !$this->safeMode || $allowRawHtmlInSafeMode;
         }
-        */
+        
 
         $hasContent = isset($text) || isset($Element['element']) || isset($Element['elements']);
 
@@ -2097,18 +2137,7 @@ class Parsedown
             }
             else
             {
-                $this->textRun->addText($text, $this->options);
-
-                /*
-                if (!$permitRawHtml)
-                {
-                    $markup .= self::escape($text, true);
-                }
-                else
-                {
-                    $markup .= $text;
-                }
-                */
+                $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
             }
 
             if ($hasName)
@@ -2127,7 +2156,7 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'ul' || $Element['name'] == 'ol')
                 {
-                    $this->listStyleName = $this->lastListStyleName;
+                    $this->listStyleName = $parentListStyle;
                     $this->listDepth -= 1;
                 }
             }
@@ -2183,6 +2212,40 @@ class Parsedown
             elseif ($Element['name'] == 'u')
             {
                 $this->options['underline'] = true;
+            }
+            elseif ($Element['name'] == 'img')
+            {
+                if (isset($Element['attributes']['src']))
+                {
+                    $height = 0;
+                    $width = 0;
+                    $options = [];
+                    if (isset($Element['attributes']['alt']) && $Element['attributes']['alt'])
+                    {
+                        $altArgs = explode(',',$Element['attributes']['alt']);
+                        $countArgs = count($altArgs);
+                        if ($countArgs >= 2)
+                        {
+                            $height = $altArgs[0];
+                            $width = $altArgs[1];
+                        }
+                        elseif ($countArgs == 1)
+                        {
+                            $height = $altArgs[0];
+                            $width = $altArgs[0];
+                        }
+                        $options['height'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($height);
+                        $options['width'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($width);
+                    }
+
+                    $p = new Paragraph();
+                    $p->addImage($Element['attributes']['src'], "${width}cm", "${height}cm");
+                }
+            }
+            elseif (in_array($Element['name'], ['h1', 'h2', 'h3', 'h4']))
+            {
+                $p = new Paragraph($this->getOdtParagraphStyle($Element['name']));
+                $p->addText($Element['htext'], $this->getOdtTextStyle('bold'));
             }
             elseif ($Element['name'] == 'ol')
             {
@@ -2261,7 +2324,7 @@ class Parsedown
             $text = $Element['text'];
         }
 
-        /*
+        
         // very strongly consider an alternative if you're writing an
         // extension
         elseif (isset($Element['rawHtml']))
@@ -2271,7 +2334,7 @@ class Parsedown
             $allowRawHtmlInSafeMode = isset($Element['allowRawHtmlInSafeMode']) && $Element['allowRawHtmlInSafeMode'];
             $permitRawHtml = !$this->safeMode || $allowRawHtmlInSafeMode;
         }
-        */
+        
 
         $hasContent = isset($text) || isset($Element['element']) || isset($Element['elements']);
 
@@ -2291,18 +2354,8 @@ class Parsedown
             }
             else
             {
-                $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
-                var_dump('li_text: '.$text);
-                /*
-                if (!$permitRawHtml)
-                {
-                    $markup .= self::escape($text, true);
-                }
-                else
-                {
-                    $markup .= $text;
-                }
-                */
+                $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
+                //var_dump('li_text: '.$text);
             }
 
             if ($hasName)
@@ -2622,9 +2675,27 @@ class Parsedown
     # Gets ODT list style based on style name
     #
 
+    protected function getOdtTextStyle($key)
+    {
+        return isset($this->odtTextStyles[$key]) ? $this->odtTextStyles[$key] : null;
+    }
+
+    #
+    # Gets ODT text style based on style name
+    #
+
     protected function getOdtListStyle($key)
     {
         return isset($this->odtListStyles[$key]) ? $this->odtListStyles[$key] : null;
+    }
+
+    #
+    # Gets ODT paragraph style based on style name
+    #
+
+    protected function getOdtParagraphStyle($key)
+    {
+        return isset($this->odtParagraphStyles[$key]) ? $this->odtParagraphStyles[$key] : null;
     }
 
     #

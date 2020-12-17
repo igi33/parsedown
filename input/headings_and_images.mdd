@@ -1,7 +1,10 @@
-# Veliki grb
+# Grb bez navedenih dimenzija
 ![](grb.jpg)
 
-## Naslov
-### u tri
-#### reda
-![2.7](grb.jpg)
+# Grb sa navedenom jednom dimenzijom
+![2.1](grb.jpg)
+
+## Grb
+### sa obe navedene
+#### dimenzije
+![2.1,1.2](grb.jpg)
