@@ -4,10 +4,9 @@ require 'variableconverter/VariableConverter.php';
 require_once 'vendor/autoload.php';
 include_once 'phpodt/phpodt.php';
 
-$idPredmet = 4780; // IIVK 1/20 - Slavica Periz
-
 // ~~~~~~~~~~~~~ DB BEGIN ~~~~~~~~~~~~~
 
+$idPredmet = 4780; // IIVK 1/20 - Slavica Periz
 $host = '127.0.0.1';
 $db   = 'slavica_periz_so_izv';
 $user = 'root';
@@ -33,7 +32,7 @@ $getIzvrsitelj = function() use ($pdo) {
 };
 
 $getKancelarija = function() use ($pdo) {
-    $stmt = $pdo->query('SELECT * FROM kancelarija ORDER BY id LIMIT 1');
+    $stmt = $pdo->query('SELECT k.*, m.naziv AS mesto FROM kancelarija k LEFT JOIN mesto m ON k.id_mesto = m.id ORDER BY k.id LIMIT 1');
     $kanc = $stmt->fetch();
     return $kanc;
 };
@@ -59,15 +58,55 @@ $getDatumZop = function() use ($pdo, $idPredmet) {
     return date('d.m.Y.', strtotime($zop['datum_donosenja']));
 };
 
-// ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
+$getPoverioci = function() {
+    $povs = [];
+    $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД', 'adresa' => 'Нови Сад, ул. Филипа Вишњића бр. 47', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'advokat' => 'чији је пуномоћник адв. Звездан Живанов, Нови Сад, Владике Платона 8/2'];
+    $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НИШ', 'adresa' => 'НИШ, ул. Генерала Милојка Лешјанина', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'advokat' => 'чији је пуномоћник адв. Адвокато, Ниш, Краља Стефана Првовенчаног'];
+    return $povs;
+};
 
+$handlePoverioci = function($poverioci) {
+    $properties = ['ime', 'adresa', 'maticni', 'advokat'];
+    $text = '';
+    $num = count($poverioci);
+    foreach ($poverioci as $i => $pov) {
+        $p = false;
+        foreach ($properties as $prop) {
+            if ((!isset($pov["print_$prop"]) || $pov["print_$prop"]) && $pov[$prop]) {
+                $text .= ($p ? ', ' : '') . $pov[$prop];
+                $p = true;
+            }
+        }
+        if ($i != $num - 1) {
+            $text .= $p ? ', ' : '';
+        }
+    }
+    return $text;
+};
+
+$poveriociParamFns = [function (&$poverioci, array $args) {
+    if (!empty($args)) {
+        $properties = ['ime', 'adresa', 'maticni', 'advokat'];
+        $propsToHide = array_diff($properties, $args);
+        foreach ($poverioci as $i => &$pov) {
+            foreach ($properties as $prop) {
+                $pov["print_$prop"] = !in_array($prop, $propsToHide);
+            }
+        }
+    }
+}];
+
+// ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
 
 $varConverter = new VariableConverter();
 $varConverter->registerVariable('izvrsitelj', $getIzvrsitelj);
 $varConverter->registerVariable('oznaka', $getOznaka);
-$varConverter->registerVariable('kancelarija', $getKancelarija);
+$varConverter->registerVariable('kancelarija', $getKancelarija, ['naziv', 'adresa', 'mesto', 'tel1', 'tel2', 'tel3', 'pib', 'maticni_broj']);
 $varConverter->registerVariable('identifikacioni_broj', $getIdentifikacioniBroj);
 $varConverter->registerVariable('datum_zop', $getDatumZop);
+$varConverter->registerCollectionVariable('poverioci', $getPoverioci, $handlePoverioci, $poveriociParamFns);
+
+/*
 
 var_dump('keys:', $varConverter->getKeys());
 // var_dump('values:', $varConverter->getValues());
@@ -75,15 +114,16 @@ var_dump('keys:', $varConverter->getKeys());
 echo $varConverter->evaluate('izvrsitelj')."\n";
 echo $varConverter->evaluate('oznaka')."\n";
 echo $varConverter->evaluate('identifikacioni_broj')."\n";
-echo $varConverter->evaluate('kancelarija')['naziv']."\n";
+echo $varConverter->evaluate('kancelarija.naziv')."\n";
 echo $varConverter->evaluate('datum_zop')."\n";
+echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 
 // var_dump('values:', $varConverter->getValues());
 
-/*
+*/
 
-// $type = Parsedown::TYPE_HTML;
-$type = Parsedown::TYPE_ODT;
+$type = Parsedown::TYPE_HTML;
+// $type = Parsedown::TYPE_ODT;
 // $type = Parsedown::TYPE_DOCX;
 
 //$phpWord = new \PhpOffice\PhpWord\PhpWord();
@@ -93,16 +133,19 @@ $type = Parsedown::TYPE_ODT;
 // headings_and_images.mdd
 // lists.mdd
 // escaping_special_characters.mdd
+// simple_variables_with_params.mdd
 // test.mdd
-$inputFileFull = 'test.mdd';
+$inputFileFull = 'simple_variables_with_params.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '_Hello_ world 3!';
 
 $parsedown = new Parsedown($type);
+$parsedown->setVarConverter($varConverter);
 // $tree = $parsedown->getTree($text);
-// $parsedown->getHtmlFromTree($tree);
+// var_dump($parsedown->getHtmlFromTree($tree));
 // $output = $parsedown->getDocxFromTree($tree);
+
 
 $output = $parsedown->text($text);
 
@@ -121,4 +164,3 @@ else
 {
     file_put_contents($filename, $output);
 }
-*/

@@ -28,6 +28,8 @@ class Parsedown
 
     protected $outputMode; // html, docx, odt
 
+    protected $varConverter;
+
     protected $fontSize;
     protected $options = [];
 
@@ -159,6 +161,16 @@ class Parsedown
                 'marginRight' => 800,
                 'marginLeft' => 800]);
         }
+    }
+
+    public function getVarConverter()
+    {
+        return $this->varConverter;
+    }
+
+    public function setVarConverter($varConverter)
+    {
+        $this->varConverter = $varConverter;
     }
 
     public function getPhpWord()
@@ -338,6 +350,7 @@ class Parsedown
         '`' => array('FencedCode'),
         '|' => array('Table'),
         '~' => array('FencedCode'),
+        //'{' => array('Loop'),
     );
 
     # ~
@@ -425,6 +438,8 @@ class Parsedown
 
             $blockTypes = $this->unmarkedBlockTypes;
 
+
+
             if (isset($this->BlockTypes[$marker]))
             {
                 foreach ($this->BlockTypes[$marker] as $blockType)
@@ -508,7 +523,7 @@ class Parsedown
 
         
                 // TODO: REMOVE
-                //var_dump('CURRENTBLOCK:',$CurrentBlock);
+                //var_dump('linesElements:',$Elements);
 
         return $Elements;
     }
@@ -525,16 +540,6 @@ class Parsedown
             {
                 $Component['element'] = array();
             }
-        } else {
-            // TODO: FIX
-            //var_dump('extractElement:',$Component);
-            if (isset($Component['element']['name']))
-            {
-                if (in_array($Component['element']['name'], ['ul', 'ol']))
-                {
-                    $Component['element']['indent'] = $Component['indent'];
-                }
-            }
         }
 
         return $Component['element'];
@@ -548,6 +553,42 @@ class Parsedown
     protected function isBlockCompletable($Type)
     {
         return method_exists($this, 'block' . $Type . 'Complete');
+    }
+
+    #
+    # Loop
+
+    protected function blockLoop($Line, $Block = null)
+    {
+        // FIND LOOP BEGIN
+
+        var_dump('blockLoop:', $Line, $Block);
+
+        $loopStartPos = strpos($Line['body'], '{LOOP:');
+        if ($loopStartPos !== false) {
+            $p1 = $loopStartPos + 6;
+            $loopBlockStartPos = strpos(substr($Line['body'], $p1), '}');
+            if ($loopBlockStartPos !== false) {
+                $loopName = substr($Line['body'], $p1, $loopBlockStartPos-1);
+
+                $loopEndPos = strpos($Line['body'], "{ENDLOOP:$loopName}");
+                if ($loopEndPos !== false) {
+                    $p2 = $p1 + strlen($loopName) + 1;
+                    $blockContent = substr($Line['body'], $p2, $loopEndPos - $p2 + 1);
+
+                    // add element to tree
+                    $el = ['name' => 'loop', 'var' => $loopName, 'content' => $blockContent];
+                    //$Elements[] = ;
+
+                    $b = [];
+                    $b['type'] = 'loop';
+                    $b['element'] = $el;
+                    return $b;
+                    //$Line['body'] = substr($Line['body'], 0, );
+                }
+            }
+        }
+        // FIND LOOP END
     }
 
     #
@@ -1326,11 +1367,12 @@ class Parsedown
         '`' => array('Code'),
         '~' => array('Strikethrough'),
         '\\' => array('EscapeSequence'),
+        '$' => array('Var'),
     );
 
     # ~
 
-    protected $inlineMarkerList = '!*_&[:<`~\\';
+    protected $inlineMarkerList = '!*_&[:<`~\\$';
 
     #
     # ~
@@ -1550,6 +1592,53 @@ class Parsedown
                     'argument' => $matches[1],
                     'destination' => 'elements',
                 )
+            ),
+        );
+    }
+
+    protected function inlineVar($Excerpt)
+    {
+        if ( ! isset($Excerpt['text'][1]))
+        {
+            return;
+        }
+
+        $marker = $Excerpt['text'][0];
+
+        if ($Excerpt['text'][1] === '{' and preg_match($this->VariableRegex, $Excerpt['text'], $matches))
+        {
+            $name = 'var';
+        }
+        else
+        {
+            return;
+        }
+
+        $varPattern = $matches[1];
+        $parts = explode('|', $varPattern);
+        $key = array_shift($parts);
+
+        $params = array();
+        foreach ($parts as $part)
+        {
+            $params[] = explode(',', $part);
+        }
+
+        return array(
+            'extent' => strlen($matches[0]),
+            'element' => array(
+                'name' => $name,
+                'key' => $key,
+                'params' => $params,
+                'text' => $varPattern,
+                /*
+                'handler' => array(
+                    'function' => 'lineText',
+                    //'function' => 'varDefinition',
+                    'argument' => $varPattern,
+                    'destination' => 'elements',
+                ),
+                */
             ),
         );
     }
@@ -1965,13 +2054,20 @@ class Parsedown
             }
             else
             {
-                if (!$permitRawHtml)
+                if ($hasName && $Element['name'] == 'var')
                 {
-                    $markup .= self::escape($text, true);
+                    $markup .= $this->varConverter->evaluate($Element['key'], $Element['params']);
                 }
                 else
                 {
-                    $markup .= $text;
+                    if (!$permitRawHtml)
+                    {
+                        $markup .= self::escape($text, true);
+                    }
+                    else
+                    {
+                        $markup .= $text;
+                    }
                 }
             }
 
@@ -2443,10 +2539,11 @@ class Parsedown
         $markup .= $autoBreak ? "\n" : '';
 
         // TODO: REMOVE
+        
         /*
         if ($markup)
         {
-            var_dump($Elements, $markup);
+            var_dump('elements:',$Elements, $markup);
         }
         */
 
@@ -2760,14 +2857,9 @@ class Parsedown
         //'_' => '/^_((?:\\\\_|[^_]|__[^_]*__)+?)_(?!_)\b/us',
     );
 
-    /*
-    protected $UnderlineRegex = array(
-        //'*' => '/^[*]((?:\\\\\*|[^*]|[*][*][^*]+?[*][*])+?)[*](?![*])/s',
-        //'@' => '/^@((?:\\\\@|[^@]|@@[^@]*@@)+?)@(?!@)\b/us',
-    );
-    */
-
     protected $UnderlineRegex = '/^_((?:\\\\_|[^_])+?)_(?!_)\b/us';
+
+    protected $VariableRegex = '/^\$\{((?:\\\\\$|[^$])+?)\}/us';
 
     protected $regexHtmlAttribute = '[a-zA-Z_:][\w:.-]*+(?:\s*+=\s*+(?:[^"\'=<>`\s]+|"[^"]*+"|\'[^\']*+\'))?+';
 
