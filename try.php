@@ -61,11 +61,36 @@ $getDatumZop = function() use ($pdo, $idPredmet) {
 $getPoverioci = function() {
     $povs = [];
     $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД', 'adresa' => 'Нови Сад, ул. Филипа Вишњића бр. 47', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'advokat' => 'чији је пуномоћник адв. Звездан Живанов, Нови Сад, Владике Платона 8/2'];
-    $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НИШ', 'adresa' => 'НИШ, ул. Генерала Милојка Лешјанина', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'advokat' => 'чији је пуномоћник адв. Адвокато, Ниш, Краља Стефана Првовенчаног'];
+    $povs[] = ['ime' => 'Јустин Лугумерски', 'adresa' => 'Сомбор, ул. Чонопљански пут бб', 'maticni' => 'ЈМБГ 0211958810068', 'advokat' => 'чији је пуномоћник адв. Радован Зиндовић, Сомбор, Доситеја Обрадовића 15'];
     return $povs;
 };
 
+$poveriociParamFns = [function (&$poverioci, array $propsToShowWithEm) {
+    if (!empty($propsToShowWithEm)) {
+        // propsToShowWithEm can contain MD emphasis so need to extract that
+        $propsToShow = [];
+        $propsEms = [];
+        $pd = new Parsedown();
+        foreach ($propsToShowWithEm as $p) {
+            $emMap = [];
+            $key = $pd->extractEmphasis($p, $emMap);
+            $propsToShow[] = $key;
+            $propsEms[$key] = $emMap;
+        }
+
+        $properties = ['ime', 'adresa', 'maticni', 'advokat'];
+        $propsToHide = array_diff($properties, $propsToShow);
+        foreach ($poverioci as $i => &$pov) {
+            foreach ($properties as $prop) {
+                $pov["print_$prop"] = !in_array($prop, $propsToHide);
+                $pov["ems_$prop"] = isset($propsEms[$prop]) ? $propsEms[$prop] : [];
+            }
+        }
+    }
+}];
+
 $handlePoverioci = function($poverioci) {
+    $pd = new Parsedown();
     $properties = ['ime', 'adresa', 'maticni', 'advokat'];
     $text = '';
     $num = count($poverioci);
@@ -73,7 +98,8 @@ $handlePoverioci = function($poverioci) {
         $p = false;
         foreach ($properties as $prop) {
             if ((!isset($pov["print_$prop"]) || $pov["print_$prop"]) && $pov[$prop]) {
-                $text .= ($p ? ', ' : '') . $pov[$prop];
+                $text .= ($p ? ', ' : '');
+                $text .= $pd->addEmphasisToSourceBasedOnMap($pov[$prop], isset($pov["ems_$prop"]) ? $pov["ems_$prop"] : []);
                 $p = true;
             }
         }
@@ -81,20 +107,8 @@ $handlePoverioci = function($poverioci) {
             $text .= $p ? ', ' : '';
         }
     }
-    return $text;
+    return ['text' => $text, 'markdown' => true];
 };
-
-$poveriociParamFns = [function (&$poverioci, array $args) {
-    if (!empty($args)) {
-        $properties = ['ime', 'adresa', 'maticni', 'advokat'];
-        $propsToHide = array_diff($properties, $args);
-        foreach ($poverioci as $i => &$pov) {
-            foreach ($properties as $prop) {
-                $pov["print_$prop"] = !in_array($prop, $propsToHide);
-            }
-        }
-    }
-}];
 
 // ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
 
@@ -122,8 +136,8 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 
 */
 
-$type = Parsedown::TYPE_HTML;
-// $type = Parsedown::TYPE_ODT;
+// $type = Parsedown::TYPE_HTML;
+$type = Parsedown::TYPE_ODT;
 // $type = Parsedown::TYPE_DOCX;
 
 //$phpWord = new \PhpOffice\PhpWord\PhpWord();
@@ -138,16 +152,24 @@ $type = Parsedown::TYPE_HTML;
 $inputFileFull = 'simple_variables_with_params.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
-// $text = '_Hello_ world 3!';
+// $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
+
 
 $parsedown = new Parsedown($type);
 $parsedown->setVarConverter($varConverter);
+
 // $tree = $parsedown->getTree($text);
+// var_dump($parsedown->lineElements($tree[0]['handler']['argument']));
 // var_dump($parsedown->getHtmlFromTree($tree));
 // $output = $parsedown->getDocxFromTree($tree);
 
+/*
+$map = [];
+var_dump($parsedown->extractEmphasis('_***Hello***_', $map), $map);
+*/
 
 $output = $parsedown->text($text);
+echo $output;
 
 $filename = "output/".time()."_$inputFile.$type";
 

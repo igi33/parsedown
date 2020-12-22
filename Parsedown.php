@@ -33,7 +33,7 @@ class Parsedown
     protected $fontSize;
     protected $options = [];
 
-    protected \PhpOffice\PhpWord\PhpWord $phpWord;
+    protected $phpWord;
     protected $section;
     protected $textRun;
     protected $listStyleName;
@@ -56,111 +56,121 @@ class Parsedown
 
         if ($this->outputMode == self::TYPE_ODT)
         {
-            $this->odt = ODT::getInstance();
-            $this->odtTextStyles = [];
-            $this->odtParagraphStyles = [];
-            $this->odtListStyles = [];
-            $this->odtFinishedListItems = [];
-            
-            $boldTextStyle = new TextStyle('bold');
-            $boldTextStyle->setBold();
-            $boldTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$boldTextStyle->getStyleName()] = $boldTextStyle;
-            
-            $italicTextStyle = new TextStyle('italic');
-            $italicTextStyle->setItalic();
-            $italicTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$italicTextStyle->getStyleName()] = $italicTextStyle;
-
-            $underlineTextStyle = new TextStyle('underline');
-            $underlineTextStyle->setTextUnderline();
-            $underlineTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$underlineTextStyle->getStyleName()] = $underlineTextStyle;
-            
-            $boldItalicTextStyle = new TextStyle('bold_italic');
-            $boldItalicTextStyle->setBold();
-            $boldItalicTextStyle->setItalic();
-            $boldItalicTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$boldItalicTextStyle->getStyleName()] = $boldItalicTextStyle;
-
-            $boldUnderlineTextStyle = new TextStyle('bold_underline');
-            $boldUnderlineTextStyle->setBold();
-            $boldUnderlineTextStyle->setTextUnderline();
-            $boldUnderlineTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$boldUnderlineTextStyle->getStyleName()] = $boldUnderlineTextStyle;
-
-            $italicUnderlineTextStyle = new TextStyle('italic_underline');
-            $italicUnderlineTextStyle->setItalic();
-            $italicUnderlineTextStyle->setTextUnderline();
-            $italicUnderlineTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$italicUnderlineTextStyle->getStyleName()] = $italicUnderlineTextStyle;
-            
-            $boldItalicUnderlineTextStyle = new TextStyle('bold_italic_underline');
-            $boldItalicUnderlineTextStyle->setBold();
-            $boldItalicUnderlineTextStyle->setItalic();
-            $boldItalicUnderlineTextStyle->setTextUnderline();
-            $boldItalicUnderlineTextStyle->setFontSize($this->fontSize);
-            $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
-
-            $heading1 = new ParagraphStyle('h1');
-            $heading1->setTextAlign(StyleConstants::CENTER);
-            $heading1->setVerticalMargin('0.2cm', '0.2cm');
-            $this->odtParagraphStyles[$heading1->getStyleName()] = $heading1;
-
-            $heading2 = new ParagraphStyle('h2');
-            $heading2->setTextAlign(StyleConstants::CENTER);
-            $heading2->setVerticalMargin('0.2cm', '0cm');
-            $this->odtParagraphStyles[$heading2->getStyleName()] = $heading2;
-
-            $heading3 = new ParagraphStyle('h3');
-            $heading3->setTextAlign(StyleConstants::CENTER);
-            $heading3->setVerticalMargin('0cm', '0cm');
-            $this->odtParagraphStyles[$heading3->getStyleName()] = $heading3;
-
-            $heading4 = new ParagraphStyle('h4');
-            $heading4->setTextAlign(StyleConstants::CENTER);
-            $heading4->setVerticalMargin('0cm', '0.2cm');
-            $this->odtParagraphStyles[$heading4->getStyleName()] = $heading4;
-
-            $romanList = new ListStyle('roman');
-            $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldTextStyle);
-            $romanList->setNumberLevel(2, new NumberFormat('', '', 'I'), $boldTextStyle);
-            $romanList->setNumberLevel(3, new NumberFormat('', '', 'I'), $boldTextStyle);
-            $this->odtListStyles[$romanList->getStyleName()] = $romanList;
-
-            $decimalList = new ListStyle('decimal');
-            $decimalList->setNumberLevel(1, new NumberFormat('', '.', '1'), $boldTextStyle);
-            $decimalList->setNumberLevel(2, new NumberFormat('', '.', '1'), $boldTextStyle);
-            $decimalList->setNumberLevel(3, new NumberFormat('', '.', '1'), $boldTextStyle);
-            $this->odtListStyles[$decimalList->getStyleName()] = $decimalList;
-
-            $bulletList = new ListStyle('bullet');
-            $bulletList->setBulletLevel(1, StyleConstants::BULLET);
-            $bulletList->setBulletLevel(2, StyleConstants::BULLET);
-            $bulletList->setBulletLevel(3, StyleConstants::BULLET);
-            $this->odtListStyles[$bulletList->getStyleName()] = $bulletList;
+            $this->initializeOdtParameters();
         }
         elseif ($this->outputMode == self::TYPE_DOCX)
         {
-            \PhpOffice\PhpWord\Settings::setOutputEscapingEnabled(true);
-            $this->phpWord = new \PhpOffice\PhpWord\PhpWord();
-            $this->phpWord->setDefaultFontName('Times New Roman');
-            $this->phpWord->setDefaultFontSize($this->fontSize);
-            $this->phpWord->setDefaultParagraphStyle(['align' => 'left', 'spaceAfter' => 0, 'spaceBefore' => 0]);
-            $this->phpWord->addTitleStyle(1, ['bold' => true], ['spaceAfter' => 200, 'spaceBefore' => 200, 'align' => 'center']);
-            $this->phpWord->addTitleStyle(11, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 200, 'align' => 'center']);
-            $this->phpWord->addTitleStyle(12, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'center']);
-            $this->phpWord->addTitleStyle(13, ['bold' => true], ['spaceAfter' => 200, 'spaceBefore' => 0, 'align' => 'center']);
-            $this->phpWord->addNumberingStyle('roman', ['type' => 'multilevel','levels' => [['format' => 'upperRoman', 'text' => '%1', 'left' => 720, 'hanging' => 720, 'tabPos' => 720], ['format' => 'lowerRoman', 'text' => '%2', 'left' => 1000, 'hanging' => 720, 'tabPos' => 1000]]]);
-            $this->phpWord->addNumberingStyle('decimal', ['type' => 'multilevel','levels' => [['format' => 'decimal', 'text' => '%1.', 'left' => 720, 'hanging' => 720, 'tabPos' => 720], ['format' => 'decimal', 'text' => '%2.', 'left' => 1000, 'hanging' => 720, 'tabPos' => 1000]]]);
-            $this->phpWord->addNumberingStyle('bullet', ['type' => 'multilevel', 'levels' => [['format' => 'bullet', 'text' => '-', 'left' => 520, 'hanging' => 200, 'tabPos' => 520], ['format' => 'bullet', 'text' => '-', 'left' => 880, 'hanging' => 200, 'tabPos' => 880], ['format' => 'bullet', 'text' => '-', 'left' => 1080, 'hanging' => 200, 'tabPos' => 1080]]]);
-        
-            $this->section = $this->phpWord->addSection([
-                'marginTop' => 600,
-                'marginBottom' => 600,
-                'marginRight' => 800,
-                'marginLeft' => 800]);
+            $this->initializePhpWordParameters();
         }
+    }
+
+    protected function initializeOdtParameters()
+    {
+        $this->odt = ODT::getInstance();
+        $this->odtTextStyles = [];
+        $this->odtParagraphStyles = [];
+        $this->odtListStyles = [];
+        $this->odtFinishedListItems = [];
+        
+        $boldTextStyle = new TextStyle('bold');
+        $boldTextStyle->setBold();
+        $boldTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$boldTextStyle->getStyleName()] = $boldTextStyle;
+        
+        $italicTextStyle = new TextStyle('italic');
+        $italicTextStyle->setItalic();
+        $italicTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$italicTextStyle->getStyleName()] = $italicTextStyle;
+
+        $underlineTextStyle = new TextStyle('underline');
+        $underlineTextStyle->setTextUnderline();
+        $underlineTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$underlineTextStyle->getStyleName()] = $underlineTextStyle;
+        
+        $boldItalicTextStyle = new TextStyle('bold_italic');
+        $boldItalicTextStyle->setBold();
+        $boldItalicTextStyle->setItalic();
+        $boldItalicTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$boldItalicTextStyle->getStyleName()] = $boldItalicTextStyle;
+
+        $boldUnderlineTextStyle = new TextStyle('bold_underline');
+        $boldUnderlineTextStyle->setBold();
+        $boldUnderlineTextStyle->setTextUnderline();
+        $boldUnderlineTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$boldUnderlineTextStyle->getStyleName()] = $boldUnderlineTextStyle;
+
+        $italicUnderlineTextStyle = new TextStyle('italic_underline');
+        $italicUnderlineTextStyle->setItalic();
+        $italicUnderlineTextStyle->setTextUnderline();
+        $italicUnderlineTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$italicUnderlineTextStyle->getStyleName()] = $italicUnderlineTextStyle;
+        
+        $boldItalicUnderlineTextStyle = new TextStyle('bold_italic_underline');
+        $boldItalicUnderlineTextStyle->setBold();
+        $boldItalicUnderlineTextStyle->setItalic();
+        $boldItalicUnderlineTextStyle->setTextUnderline();
+        $boldItalicUnderlineTextStyle->setFontSize($this->fontSize);
+        $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
+
+        $heading1 = new ParagraphStyle('h1');
+        $heading1->setTextAlign(StyleConstants::CENTER);
+        $heading1->setVerticalMargin('0.2cm', '0.2cm');
+        $this->odtParagraphStyles[$heading1->getStyleName()] = $heading1;
+
+        $heading2 = new ParagraphStyle('h2');
+        $heading2->setTextAlign(StyleConstants::CENTER);
+        $heading2->setVerticalMargin('0.2cm', '0cm');
+        $this->odtParagraphStyles[$heading2->getStyleName()] = $heading2;
+
+        $heading3 = new ParagraphStyle('h3');
+        $heading3->setTextAlign(StyleConstants::CENTER);
+        $heading3->setVerticalMargin('0cm', '0cm');
+        $this->odtParagraphStyles[$heading3->getStyleName()] = $heading3;
+
+        $heading4 = new ParagraphStyle('h4');
+        $heading4->setTextAlign(StyleConstants::CENTER);
+        $heading4->setVerticalMargin('0cm', '0.2cm');
+        $this->odtParagraphStyles[$heading4->getStyleName()] = $heading4;
+
+        $romanList = new ListStyle('roman');
+        $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldTextStyle);
+        $romanList->setNumberLevel(2, new NumberFormat('', '', 'I'), $boldTextStyle);
+        $romanList->setNumberLevel(3, new NumberFormat('', '', 'I'), $boldTextStyle);
+        $this->odtListStyles[$romanList->getStyleName()] = $romanList;
+
+        $decimalList = new ListStyle('decimal');
+        $decimalList->setNumberLevel(1, new NumberFormat('', '.', '1'), $boldTextStyle);
+        $decimalList->setNumberLevel(2, new NumberFormat('', '.', '1'), $boldTextStyle);
+        $decimalList->setNumberLevel(3, new NumberFormat('', '.', '1'), $boldTextStyle);
+        $this->odtListStyles[$decimalList->getStyleName()] = $decimalList;
+
+        $bulletList = new ListStyle('bullet');
+        $bulletList->setBulletLevel(1, StyleConstants::BULLET);
+        $bulletList->setBulletLevel(2, StyleConstants::BULLET);
+        $bulletList->setBulletLevel(3, StyleConstants::BULLET);
+        $this->odtListStyles[$bulletList->getStyleName()] = $bulletList;
+    }
+
+    protected function initializePhpWordParameters()
+    {
+        \PhpOffice\PhpWord\Settings::setOutputEscapingEnabled(true);
+        $this->phpWord = new \PhpOffice\PhpWord\PhpWord();
+        $this->phpWord->setDefaultFontName('Times New Roman');
+        $this->phpWord->setDefaultFontSize($this->fontSize);
+        $this->phpWord->setDefaultParagraphStyle(['align' => 'left', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $this->phpWord->addTitleStyle(1, ['bold' => true], ['spaceAfter' => 200, 'spaceBefore' => 200, 'align' => 'center']);
+        $this->phpWord->addTitleStyle(11, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 200, 'align' => 'center']);
+        $this->phpWord->addTitleStyle(12, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'center']);
+        $this->phpWord->addTitleStyle(13, ['bold' => true], ['spaceAfter' => 200, 'spaceBefore' => 0, 'align' => 'center']);
+        $this->phpWord->addNumberingStyle('roman', ['type' => 'multilevel','levels' => [['format' => 'upperRoman', 'text' => '%1', 'left' => 720, 'hanging' => 720, 'tabPos' => 720], ['format' => 'lowerRoman', 'text' => '%2', 'left' => 1000, 'hanging' => 720, 'tabPos' => 1000]]]);
+        $this->phpWord->addNumberingStyle('decimal', ['type' => 'multilevel','levels' => [['format' => 'decimal', 'text' => '%1.', 'left' => 720, 'hanging' => 720, 'tabPos' => 720], ['format' => 'decimal', 'text' => '%2.', 'left' => 1000, 'hanging' => 720, 'tabPos' => 1000]]]);
+        $this->phpWord->addNumberingStyle('bullet', ['type' => 'multilevel', 'levels' => [['format' => 'bullet', 'text' => '-', 'left' => 520, 'hanging' => 200, 'tabPos' => 520], ['format' => 'bullet', 'text' => '-', 'left' => 880, 'hanging' => 200, 'tabPos' => 880], ['format' => 'bullet', 'text' => '-', 'left' => 1080, 'hanging' => 200, 'tabPos' => 1080]]]);
+    
+        $this->section = $this->phpWord->addSection([
+            'marginTop' => 600,
+            'marginBottom' => 600,
+            'marginRight' => 800,
+            'marginLeft' => 800]);
     }
 
     public function getVarConverter()
@@ -253,6 +263,29 @@ class Parsedown
 
         # iterate through lines to identify blocks
         return $this->linesElements($lines);
+    }
+
+    public function extractEmphasis($text, array &$emphasisMap)
+    {
+        $le = $this->lineElements($text);
+        $innerText = $text;
+        while (isset($le[1]['name']))
+        {
+            $el = $le[1];
+            $key = $el['name'] == 'em' ? 'italic' : ($el['name'] == 'strong' ? 'bold' : ($el['name'] == 'u' ? 'underline' : ''));
+            
+            
+            if (!$key)
+            {
+                break;
+            }
+
+            $emphasisMap[$key] = true;
+            $innerText = $el['handler']['argument'];
+            $le = $this->lineElements($innerText);
+        }
+        
+        return $innerText;
     }
 
     #
@@ -1383,7 +1416,7 @@ class Parsedown
         return $this->elements($this->lineElements($text, $nonNestables));
     }
 
-    protected function lineElements($text, $nonNestables = array())
+    public function lineElements($text, $nonNestables = array())
     {
         # standardize line breaks
         $text = str_replace(array("\r\n", "\r"), "\n", $text);
@@ -2056,7 +2089,18 @@ class Parsedown
             {
                 if ($hasName && $Element['name'] == 'var')
                 {
-                    $markup .= $this->varConverter->evaluate($Element['key'], $Element['params']);
+                    $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
+                    if (is_array($value) && isset($value['markdown'], $value['text']))
+                    {
+                        // TODO: check existence of $tree[0]['handler']['argument']
+                        $tree = $this->getTree($value['text']);
+                        $markup .= $this->elements($this->lineElements($tree[0]['handler']['argument']));
+                    }
+                    else
+                    {
+                        $markup .= $value;
+                    }
+                    
                 }
                 else
                 {
@@ -2233,7 +2277,27 @@ class Parsedown
             }
             else
             {
-                $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
+                if ($hasName && $Element['name'] == 'var')
+                {
+                    $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
+                    if (is_array($value) && isset($value['markdown'], $value['text']))
+                    {
+                        // TODO: check existence of $tree[0]['handler']['argument']
+                        $tree = $this->getTree($value['text']);
+                        // var_dump('VAR array:', $tree[0]['handler']['argument']);
+                        $markup .= $this->elementsDocx($this->lineElements($tree[0]['handler']['argument']));
+                    }
+                    else
+                    {
+                        // var_dump('Added text VAR:', $value, $this->options);
+                        $this->textRun->addText($value, $this->options);
+                    }
+                }
+                else
+                {
+                    // var_dump('Added text:', $text, $this->options);
+                    $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
+                }
             }
 
             if ($hasName)
@@ -2248,7 +2312,7 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'u')
                 {
-                    $this->options['underline'] = false;
+                    $this->options['underline'] = 'none';
                 }
                 elseif ($Element['name'] == 'ul' || $Element['name'] == 'ol')
                 {
@@ -2268,7 +2332,6 @@ class Parsedown
             $markup .= ' />';
             */
         }
-        
 
         return $markup;
     }
@@ -2450,8 +2513,25 @@ class Parsedown
             }
             else
             {
-                $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
-                //var_dump('li_text: '.$text);
+                if ($hasName && $Element['name'] == 'var')
+                {
+                    $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
+                    if (is_array($value) && isset($value['markdown'], $value['text']))
+                    {
+                        // TODO: check existence of $tree[0]['handler']['argument']
+                        $tree = $this->getTree($value['text']);
+                        $markup .= $this->elementsOdt($this->lineElements($tree[0]['handler']['argument']));
+                    }
+                    else
+                    {
+                        $this->p->addText($value, $this->wordOptionsToOdtTextStyle($this->options));
+                    }
+                }
+                else
+                {
+                    $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
+                    //var_dump('li_text: '.$text);
+                }
             }
 
             if ($hasName)
@@ -2466,7 +2546,7 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'u')
                 {
-                    $this->options['underline'] = false;
+                    $this->options['underline'] = 'none';
                 }
                 elseif ($Element['name'] == 'ul' || $Element['name'] == 'ol')
                 {
@@ -2796,6 +2876,28 @@ class Parsedown
     }
 
     #
+    # Returns a Markdown text representing an encapsulated string value based on an emphasis array map
+    # Example:
+    # Input: $propValue = 'foo', $emMap = ['italic' => true, 'underline' => true]
+    # Output: '*_foo_*'
+    #
+
+    public function addEmphasisToSourceBasedOnMap($propValue, array $emMap)
+    {
+        $text = '';
+        foreach ($emMap as $key => $val)
+        {
+            $text .= $key == 'italic' && $val ? '*' : ($key == 'bold' && $val ? '**' : ($key == 'underline' && $val ? '_' : ''));
+        }
+        $text .= $propValue;
+        $emsReverse = array_reverse($emMap);
+        foreach ($emsReverse as $key => $val) {
+            $text .= $key == 'italic' && $val ? '*' : ($key == 'bold' && $val ? '**' : ($key == 'underline' && $val ? '_' : ''));
+        }
+        return $text;
+    }
+
+    #
     # Static Methods
     #
 
@@ -2849,12 +2951,10 @@ class Parsedown
 
     protected $StrongRegex = array(
         '*' => '/^[*]{2}((?:\\\\\*|[^*]|[*][^*]*+[*])+?)[*]{2}(?![*])/s',
-        //'_' => '/^__((?:\\\\_|[^_]|_[^_]*+_)+?)__(?!_)/us',
     );
 
     protected $EmRegex = array(
         '*' => '/^[*]((?:\\\\\*|[^*]|[*][*][^*]+?[*][*])+?)[*](?![*])/s',
-        //'_' => '/^_((?:\\\\_|[^_]|__[^_]*__)+?)_(?!_)\b/us',
     );
 
     protected $UnderlineRegex = '/^_((?:\\\\_|[^_])+?)_(?!_)\b/us';
