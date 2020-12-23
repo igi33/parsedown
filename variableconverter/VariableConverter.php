@@ -1,10 +1,13 @@
 <?php
 class VariableConverter {
      // key = var name, value = associative array formatted as:
-     // ('source' => function, 'properties' => optional object properties)
+     // ['fn_source' => function to get initial value,
+     // 'properties' => optional allowed object properties,
+     // 'fns_params' => array of functions that handles each parameter of a variable,
+     // 'collection' => boolean denoting if the variable is a collection
+     // 'fn_handle' => function that transforms the collection values to text]
     protected $keys;
-     // key = var name, value = evaluated value
-    protected $values;
+    protected $values; // key = var name, value = evaluated value
 
     public function __construct() {
         $this->keys = [];
@@ -19,8 +22,8 @@ class VariableConverter {
         return $this->values;
     }
 
-    public function registerVariable($key, $fnSource, array $properties = []) {
-        $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => []];
+    public function registerVariable($key, $fnSource, array $fnsParams = [], array $properties = []) {
+        $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => $fnsParams];
     }
 
     public function registerCollectionVariable($key, $fnSource, $fnHandle, array $fnsParams = []) {
@@ -32,7 +35,7 @@ class VariableConverter {
         unset($this->values[$key]);
     }
 
-    public function evaluate($key, $params = []) {
+    public function evaluate($key, $params) {
         $keyPathItems = explode('.', $key);
         $name = array_shift($keyPathItems);
 
@@ -40,25 +43,31 @@ class VariableConverter {
             throw new Exception("Cannot evaluate, non-existent key '$name'");
         }
 
+        // calculate initial variable value from source function
         if (!array_key_exists($name, $this->values)) {
             $this->values[$name] = $this->keys[$name]['fn_source']();
         }
 
+        // get value
         $value = $this->values[$name];
 
-        if ($this->keys[$name]['collection']) {
-            // variable is a collection
-            foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
-                if (isset($params[$i])) {
-                    $fnParam($value, $params[$i]);
-                }
+        // optionally execute variable parameter functions
+        foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
+            if (isset($params[$i])) {
+                $fnParam($value, $params[$i]);
             }
-            return $this->keys[$name]['fn_handle']($value);
         }
 
+        // if variable is a collection, call handle function and return value
+        if ($this->keys[$name]['collection']) {
+            return $this->keys[$name]['fn_handle']($value);
+        }
         // from here on out, variable is not a collection
 
-        // handles variable properties like 'kancelarija.naziv' separated by dots
+        // Handles variable properties like 'kancelarija.naziv' separated by dots.
+        // This is useful for cases when a variable value is an associated array or an object.
+        // The code checks if the property is an array key, a public object property
+        // or if a respective getter object method exists, in that order.
         if (count($keyPathItems)) {
             $keyPropertiesPath = implode('.', $keyPathItems);
             if (!in_array($keyPropertiesPath, $this->keys[$name]['properties'])) {

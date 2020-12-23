@@ -73,7 +73,7 @@ $poveriociParamFns = [function (&$poverioci, array $propsToShowWithEm) {
         $pd = new Parsedown();
         foreach ($propsToShowWithEm as $p) {
             $emMap = [];
-            $key = $pd->extractEmphasis($p, $emMap);
+            $key = $pd->extractEmphasisFromSource($p, $emMap);
             $propsToShow[] = $key;
             $propsEms[$key] = $emMap;
         }
@@ -99,7 +99,7 @@ $handlePoverioci = function($poverioci) {
         foreach ($properties as $prop) {
             if ((!isset($pov["print_$prop"]) || $pov["print_$prop"]) && $pov[$prop]) {
                 $text .= ($p ? ', ' : '');
-                $text .= $pd->addEmphasisToSourceBasedOnMap($pov[$prop], isset($pov["ems_$prop"]) ? $pov["ems_$prop"] : []);
+                $text .= $pd->insertEmphasisToSource($pov[$prop], isset($pov["ems_$prop"]) ? $pov["ems_$prop"] : []);
                 $p = true;
             }
         }
@@ -137,8 +137,8 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 */
 
 // $type = Parsedown::TYPE_HTML;
-$type = Parsedown::TYPE_ODT;
-// $type = Parsedown::TYPE_DOCX;
+// $type = Parsedown::TYPE_ODT;
+$type = Parsedown::TYPE_DOCX;
 
 //$phpWord = new \PhpOffice\PhpWord\PhpWord();
 //$odt = ODT::getInstance();

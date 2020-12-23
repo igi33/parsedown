@@ -48,19 +48,22 @@ class Parsedown
     protected $list;
     protected $odtFinishedListItems;
 
-    public function __construct($mode = self::TYPE_DOCX)
+    public function __construct($mode = null)
     {
-        $this->outputMode = $mode;
-        $this->fontSize = 11;
-        $this->listDepth = -1;
-
-        if ($this->outputMode == self::TYPE_ODT)
+        if ($mode)
         {
-            $this->initializeOdtParameters();
-        }
-        elseif ($this->outputMode == self::TYPE_DOCX)
-        {
-            $this->initializePhpWordParameters();
+            $this->outputMode = $mode;
+            $this->fontSize = 11;
+            $this->listDepth = -1;
+    
+            if ($this->outputMode == self::TYPE_ODT)
+            {
+                $this->initializeOdtParameters();
+            }
+            elseif ($this->outputMode == self::TYPE_DOCX)
+            {
+                $this->initializePhpWordParameters();
+            }
         }
     }
 
@@ -218,11 +221,6 @@ class Parsedown
         # parse
         $Elements = $this->textElements($text);
 
-        /*
-        var_dump('text:', $text);
-        var_dump('tree:', $Elements);
-        */
-
         # convert
         if ($this->outputMode == self::TYPE_ODT)
         {
@@ -238,7 +236,7 @@ class Parsedown
         }
         else
         {
-            throw new Exception('Unknown type');
+            throw new Exception('Unknown document type');
         }
 
         # trim line breaks
@@ -263,29 +261,6 @@ class Parsedown
 
         # iterate through lines to identify blocks
         return $this->linesElements($lines);
-    }
-
-    public function extractEmphasis($text, array &$emphasisMap)
-    {
-        $le = $this->lineElements($text);
-        $innerText = $text;
-        while (isset($le[1]['name']))
-        {
-            $el = $le[1];
-            $key = $el['name'] == 'em' ? 'italic' : ($el['name'] == 'strong' ? 'bold' : ($el['name'] == 'u' ? 'underline' : ''));
-            
-            
-            if (!$key)
-            {
-                break;
-            }
-
-            $emphasisMap[$key] = true;
-            $innerText = $el['handler']['argument'];
-            $le = $this->lineElements($innerText);
-        }
-        
-        return $innerText;
     }
 
     #
@@ -383,7 +358,6 @@ class Parsedown
         '`' => array('FencedCode'),
         '|' => array('Table'),
         '~' => array('FencedCode'),
-        //'{' => array('Loop'),
     );
 
     # ~
@@ -586,42 +560,6 @@ class Parsedown
     protected function isBlockCompletable($Type)
     {
         return method_exists($this, 'block' . $Type . 'Complete');
-    }
-
-    #
-    # Loop
-
-    protected function blockLoop($Line, $Block = null)
-    {
-        // FIND LOOP BEGIN
-
-        var_dump('blockLoop:', $Line, $Block);
-
-        $loopStartPos = strpos($Line['body'], '{LOOP:');
-        if ($loopStartPos !== false) {
-            $p1 = $loopStartPos + 6;
-            $loopBlockStartPos = strpos(substr($Line['body'], $p1), '}');
-            if ($loopBlockStartPos !== false) {
-                $loopName = substr($Line['body'], $p1, $loopBlockStartPos-1);
-
-                $loopEndPos = strpos($Line['body'], "{ENDLOOP:$loopName}");
-                if ($loopEndPos !== false) {
-                    $p2 = $p1 + strlen($loopName) + 1;
-                    $blockContent = substr($Line['body'], $p2, $loopEndPos - $p2 + 1);
-
-                    // add element to tree
-                    $el = ['name' => 'loop', 'var' => $loopName, 'content' => $blockContent];
-                    //$Elements[] = ;
-
-                    $b = [];
-                    $b['type'] = 'loop';
-                    $b['element'] = $el;
-                    return $b;
-                    //$Line['body'] = substr($Line['body'], 0, );
-                }
-            }
-        }
-        // FIND LOOP END
     }
 
     #
@@ -1415,8 +1353,18 @@ class Parsedown
     {
         return $this->elements($this->lineElements($text, $nonNestables));
     }
+    
+    public function lineDocx($text, $nonNestables = array())
+    {
+        return $this->elementsDocx($this->lineElements($text, $nonNestables));
+    }
+    
+    public function lineOdt($text, $nonNestables = array())
+    {
+        return $this->elementsOdt($this->lineElements($text, $nonNestables));
+    }
 
-    public function lineElements($text, $nonNestables = array())
+    protected function lineElements($text, $nonNestables = array())
     {
         # standardize line breaks
         $text = str_replace(array("\r\n", "\r"), "\n", $text);
@@ -2280,23 +2228,36 @@ class Parsedown
                 if ($hasName && $Element['name'] == 'var')
                 {
                     $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
-                    if (is_array($value) && isset($value['markdown'], $value['text']))
+
+                    // handle variable value 
+                    if (is_array($value))
                     {
-                        // TODO: check existence of $tree[0]['handler']['argument']
-                        $tree = $this->getTree($value['text']);
-                        // var_dump('VAR array:', $tree[0]['handler']['argument']);
-                        $markup .= $this->elementsDocx($this->lineElements($tree[0]['handler']['argument']));
+                        // value is array
+                        if (isset($value['markdown'], $value['text']) && $value['markdown'] && $value['text'])
+                        {
+                            // value is markdown text, so parse it and handle elements
+                            $tree = $this->getTree($value['text']);
+                            if (isset($tree[0]['handler']['argument']))
+                            {
+                                $markup .= $this->lineDocx($tree[0]['handler']['argument']);
+                            }
+                        }
                     }
                     else
                     {
-                        // var_dump('Added text VAR:', $value, $this->options);
-                        $this->textRun->addText($value, $this->options);
+                        // value is text
+                        if ($value)
+                        {
+                            $this->textRun->addText($value, $this->options);
+                        }
                     }
                 }
                 else
                 {
-                    // var_dump('Added text:', $text, $this->options);
-                    $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
+                    if ($text)
+                    {
+                        $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
+                    }
                 }
             }
 
@@ -2516,21 +2477,36 @@ class Parsedown
                 if ($hasName && $Element['name'] == 'var')
                 {
                     $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
-                    if (is_array($value) && isset($value['markdown'], $value['text']))
+
+                    // handle variable value 
+                    if (is_array($value))
                     {
-                        // TODO: check existence of $tree[0]['handler']['argument']
-                        $tree = $this->getTree($value['text']);
-                        $markup .= $this->elementsOdt($this->lineElements($tree[0]['handler']['argument']));
+                        // value is array
+                        if (isset($value['markdown'], $value['text']) && $value['markdown'] && $value['text'])
+                        {
+                            // value is markdown text, so parse it and handle elements
+                            $tree = $this->getTree($value['text']);
+                            if (isset($tree[0]['handler']['argument']))
+                            {
+                                $markup .= $this->lineOdt($tree[0]['handler']['argument']);
+                            }
+                        }
                     }
                     else
                     {
-                        $this->p->addText($value, $this->wordOptionsToOdtTextStyle($this->options));
+                        // value is text
+                        if ($value)
+                        {
+                            $this->p->addText($value, $this->wordOptionsToOdtTextStyle($this->options));
+                        }
                     }
                 }
                 else
                 {
-                    $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
-                    //var_dump('li_text: '.$text);
+                    if ($text)
+                    {
+                        $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
+                    }
                 }
             }
 
@@ -2735,71 +2711,7 @@ class Parsedown
         return $newElements;
     }
 
-    #
-    # Deprecated Methods
-    #
-
-    function parse($text)
-    {
-        $markup = $this->text($text);
-
-        return $markup;
-    }
-
-    protected function sanitiseElement(array $Element)
-    {
-        static $goodAttribute = '/^[a-zA-Z0-9][a-zA-Z0-9-_]*+$/';
-        static $safeUrlNameToAtt  = array(
-            'a'   => 'href',
-            'img' => 'src',
-        );
-
-        if ( ! isset($Element['name']))
-        {
-            unset($Element['attributes']);
-            return $Element;
-        }
-
-        if (isset($safeUrlNameToAtt[$Element['name']]))
-        {
-            $Element = $this->filterUnsafeUrlInAttribute($Element, $safeUrlNameToAtt[$Element['name']]);
-        }
-
-        if ( ! empty($Element['attributes']))
-        {
-            foreach ($Element['attributes'] as $att => $val)
-            {
-                # filter out badly parsed attribute
-                if ( ! preg_match($goodAttribute, $att))
-                {
-                    unset($Element['attributes'][$att]);
-                }
-                # dump onevent attribute
-                elseif (self::striAtStart($att, 'on'))
-                {
-                    unset($Element['attributes'][$att]);
-                }
-            }
-        }
-
-        return $Element;
-    }
-
-    protected function filterUnsafeUrlInAttribute(array $Element, $attribute)
-    {
-        foreach ($this->safeLinksWhitelist as $scheme)
-        {
-            if (self::striAtStart($Element['attributes'][$attribute], $scheme))
-            {
-                return $Element;
-            }
-        }
-
-        $Element['attributes'][$attribute] = str_replace(':', '%3A', $Element['attributes'][$attribute]);
-
-        return $Element;
-    }
-
+    
     #
     # Converts the options array used in PhpWord to an ODT text style object
     #
@@ -2874,27 +2786,124 @@ class Parsedown
     {
         return isset($this->odtParagraphStyles[$key]) ? $this->odtParagraphStyles[$key] : null;
     }
+    
+    #
+    # Parses text to extract emphasis (bold, italic, underline) information
+    # which is stored in a boolean map and returns underlying word.
+    # Example:
+    # Input: '*_foo_*'
+    # Output: returns 'foo', $emMap = ['em' => true, 'u' => true]
+    #
+
+    public function extractEmphasisFromSource($text, array &$emMap)
+    {
+        $le = $this->lineElements($text);
+        $innerText = $text;
+        while (isset($le[1]['name']))
+        {
+            $el = $le[1];
+            if (in_array($el['name'], array('em', 'strong', 'u')) && isset($el['handler']['argument']))
+            {
+                $key = $el['name'];
+            }
+            else
+            {
+                break;
+            }
+
+            $emMap[$key] = true;
+            $innerText = $el['handler']['argument'];
+            $le = $this->lineElements($innerText);
+        }
+        
+        return $innerText;
+    }
 
     #
     # Returns a Markdown text representing an encapsulated string value based on an emphasis array map
     # Example:
-    # Input: $propValue = 'foo', $emMap = ['italic' => true, 'underline' => true]
-    # Output: '*_foo_*'
+    # Input: $str = 'foo', $emMap = ['em' => true, 'u' => true]
+    # Output: returns '*_foo_*'
     #
 
-    public function addEmphasisToSourceBasedOnMap($propValue, array $emMap)
+    public function insertEmphasisToSource($str, array $emMap)
     {
         $text = '';
         foreach ($emMap as $key => $val)
         {
-            $text .= $key == 'italic' && $val ? '*' : ($key == 'bold' && $val ? '**' : ($key == 'underline' && $val ? '_' : ''));
+            $text .= $key == 'em' && $val ? '*' : ($key == 'strong' && $val ? '**' : ($key == 'u' && $val ? '_' : ''));
         }
-        $text .= $propValue;
+        $text .= $str;
         $emsReverse = array_reverse($emMap);
         foreach ($emsReverse as $key => $val) {
-            $text .= $key == 'italic' && $val ? '*' : ($key == 'bold' && $val ? '**' : ($key == 'underline' && $val ? '_' : ''));
+            $text .= $key == 'em' && $val ? '*' : ($key == 'strong' && $val ? '**' : ($key == 'u' && $val ? '_' : ''));
         }
         return $text;
+    }
+
+    #
+    # Deprecated Methods
+    #
+
+    function parse($text)
+    {
+        $markup = $this->text($text);
+
+        return $markup;
+    }
+
+    protected function sanitiseElement(array $Element)
+    {
+        static $goodAttribute = '/^[a-zA-Z0-9][a-zA-Z0-9-_]*+$/';
+        static $safeUrlNameToAtt  = array(
+            'a'   => 'href',
+            'img' => 'src',
+        );
+
+        if ( ! isset($Element['name']))
+        {
+            unset($Element['attributes']);
+            return $Element;
+        }
+
+        if (isset($safeUrlNameToAtt[$Element['name']]))
+        {
+            $Element = $this->filterUnsafeUrlInAttribute($Element, $safeUrlNameToAtt[$Element['name']]);
+        }
+
+        if ( ! empty($Element['attributes']))
+        {
+            foreach ($Element['attributes'] as $att => $val)
+            {
+                # filter out badly parsed attribute
+                if ( ! preg_match($goodAttribute, $att))
+                {
+                    unset($Element['attributes'][$att]);
+                }
+                # dump onevent attribute
+                elseif (self::striAtStart($att, 'on'))
+                {
+                    unset($Element['attributes'][$att]);
+                }
+            }
+        }
+
+        return $Element;
+    }
+
+    protected function filterUnsafeUrlInAttribute(array $Element, $attribute)
+    {
+        foreach ($this->safeLinksWhitelist as $scheme)
+        {
+            if (self::striAtStart($Element['attributes'][$attribute], $scheme))
+            {
+                return $Element;
+            }
+        }
+
+        $Element['attributes'][$attribute] = str_replace(':', '%3A', $Element['attributes'][$attribute]);
+
+        return $Element;
     }
 
     #
@@ -2946,7 +2955,7 @@ class Parsedown
     # Read-Only
 
     protected $specialCharacters = array(
-        '\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '>', '#', '+', '-', '.', '!', '|', '~', '@'
+        '\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '>', '#', '+', '-', '.', '!', '|', '~',
     );
 
     protected $StrongRegex = array(
