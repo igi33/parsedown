@@ -51,15 +51,14 @@ class VariableConverter {
         // get value
         $value = $this->values[$name];
 
-        // optionally execute variable parameter functions
-        foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
-            if (isset($params[$i])) {
-                $fnParam($value, $params[$i]);
-            }
-        }
-
         // if variable is a collection, call handle function and return value
         if ($this->keys[$name]['collection']) {
+            // optionally execute variable parameter functions
+            foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
+                if (isset($params[$i])) {
+                    $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
+                }
+            }
             return $this->keys[$name]['fn_handle']($value);
         }
         // from here on out, variable is not a collection
@@ -95,6 +94,13 @@ class VariableConverter {
                 }
 
                 $currentKeyName .= ".$prop";
+            }
+        }
+
+        // optionally execute variable parameter functions
+        foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
+            if (isset($params[$i])) {
+                $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
             }
         }
 

@@ -18,8 +18,9 @@ class Parsedown
 {
     # ~
 
-    const version = '1.8.0-beta-7';
+    const version = '1.9.0-alpha';
 
+    // supported output type constants
     const TYPE_HTML = 'html';
     const TYPE_DOCX = 'docx';
     const TYPE_ODT = 'odt';
@@ -27,84 +28,117 @@ class Parsedown
     # ~
 
     protected $outputMode; // html, docx, odt
+    protected $varConverter; // instance of VariableConverter
 
-    protected $varConverter;
-
+    // document properties
+    protected $fontName;
     protected $fontSize;
-    protected $options = [];
-
-    protected $phpWord;
-    protected $section;
-    protected $textRun;
-    protected $listStyleName;
-    protected $lastListStyleName;
+    protected $marginTop; // in cm
+    protected $marginBottom; // in cm
+    protected $marginLeft; // in cm
+    protected $marginRight; // in cm
+    
+    // shared properties
+    protected $options; // holds the current format style state, e.g. bold, italic, underline
+    protected $paragraphDepth; // based on this property a paragraph style is chosen
     protected $listDepth;
+    protected $listIsRoman; // boolean property: true => roman lists, false => decimal lists
 
+    // properties used for keeping phpword internal state
+    protected $phpWord;
+    protected $section; // holds the current section object
+    protected $textRun; // holds the current textRun or listItemRun object
+    protected $pStyle;
+    protected $pStyleCell; // holds the current pStyle name for table cell text runs
+    protected $listStyleName;
+    protected $table;
+    protected $row;
+    protected $cell;
+    protected $isTh; // true if in thead, false if in tbody
+
+    // properties used for keeping phpodt internal state
     protected $odt;
     protected $odtTextStyles;
     protected $odtParagraphStyles;
     protected $odtListStyles;
-    protected $p;
-    protected $list;
+    protected $odtPageStyle;
+    protected $p; // holds the current Paragraph object
+    protected $list; // holds the current ODTList object
     protected $odtFinishedListItems;
 
     public function __construct($mode = null)
     {
         if ($mode)
         {
-            $this->outputMode = $mode;
-            $this->fontSize = 11;
-            $this->listDepth = -1;
-    
-            if ($this->outputMode == self::TYPE_ODT)
-            {
-                $this->initializeOdtParameters();
-            }
-            elseif ($this->outputMode == self::TYPE_DOCX)
-            {
-                $this->initializePhpWordParameters();
-            }
+            $this->setOutputMode($mode);
         }
+    }
+
+    #
+    # Initialization methods
+    #
+
+    protected function initializeSharedParameters()
+    {
+        $this->options = array();
+        $this->marginTop = 1.06;
+        $this->marginBottom = 1.06;
+        $this->marginRight = 1.41;
+        $this->marginLeft = 1.41;
+        $this->fontSize = 11;
+        $this->paragraphDepth = -1;
+        $this->listDepth = -1;
+        $this->listIsRoman = true;
     }
 
     protected function initializeOdtParameters()
     {
+        $this->fontName = 'Liberation Serif';
         $this->odt = ODT::getInstance();
-        $this->odtTextStyles = [];
-        $this->odtParagraphStyles = [];
-        $this->odtListStyles = [];
-        $this->odtFinishedListItems = [];
+        $this->odtTextStyles = array();
+        $this->odtParagraphStyles = array();
+        $this->odtListStyles = array();
+        $this->odtPageStyle = null;
+        $this->odtFinishedListItems = array();
+        $this->p = null;
+        $this->list = null;
         
         $boldTextStyle = new TextStyle('bold');
         $boldTextStyle->setBold();
+        $boldTextStyle->setFontName($this->fontName);
         $boldTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$boldTextStyle->getStyleName()] = $boldTextStyle;
         
         $italicTextStyle = new TextStyle('italic');
         $italicTextStyle->setItalic();
+        $italicTextStyle->setFontName($this->fontName);
         $italicTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$italicTextStyle->getStyleName()] = $italicTextStyle;
 
         $underlineTextStyle = new TextStyle('underline');
         $underlineTextStyle->setTextUnderline();
+        $underlineTextStyle->setFontName($this->fontName);
         $underlineTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$underlineTextStyle->getStyleName()] = $underlineTextStyle;
         
         $boldItalicTextStyle = new TextStyle('bold_italic');
         $boldItalicTextStyle->setBold();
         $boldItalicTextStyle->setItalic();
+        $boldItalicTextStyle->setFontName($this->fontName);
         $boldItalicTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$boldItalicTextStyle->getStyleName()] = $boldItalicTextStyle;
 
         $boldUnderlineTextStyle = new TextStyle('bold_underline');
         $boldUnderlineTextStyle->setBold();
         $boldUnderlineTextStyle->setTextUnderline();
+        $boldUnderlineTextStyle->setFontName($this->fontName);
         $boldUnderlineTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$boldUnderlineTextStyle->getStyleName()] = $boldUnderlineTextStyle;
 
         $italicUnderlineTextStyle = new TextStyle('italic_underline');
         $italicUnderlineTextStyle->setItalic();
         $italicUnderlineTextStyle->setTextUnderline();
+        $italicUnderlineTextStyle->setFontName($this->fontName);
         $italicUnderlineTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$italicUnderlineTextStyle->getStyleName()] = $italicUnderlineTextStyle;
         
@@ -112,6 +146,7 @@ class Parsedown
         $boldItalicUnderlineTextStyle->setBold();
         $boldItalicUnderlineTextStyle->setItalic();
         $boldItalicUnderlineTextStyle->setTextUnderline();
+        $boldItalicUnderlineTextStyle->setFontName($this->fontName);
         $boldItalicUnderlineTextStyle->setFontSize($this->fontSize);
         $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
 
@@ -152,15 +187,35 @@ class Parsedown
         $bulletList->setBulletLevel(2, StyleConstants::BULLET);
         $bulletList->setBulletLevel(3, StyleConstants::BULLET);
         $this->odtListStyles[$bulletList->getStyleName()] = $bulletList;
+
+        $pageStyle = new PageStyle('page');
+        $this->odtPageStyle = $pageStyle;
+        $this->setPhpOdtMargins();
     }
 
     protected function initializePhpWordParameters()
     {
+        $this->fontName = 'Times New Roman';
+        $this->pStyle = null;
+        $this->pStyleCell = null;
+        $this->textRun = null;
+        $this->listStyleName = null;
+        $this->table = null;
+        $this->row = null;
+        $this->cell = null;
+        $this->isTh = null;
+
         \PhpOffice\PhpWord\Settings::setOutputEscapingEnabled(true);
         $this->phpWord = new \PhpOffice\PhpWord\PhpWord();
-        $this->phpWord->setDefaultFontName('Times New Roman');
+        $this->phpWord->setDefaultFontName($this->fontName);
         $this->phpWord->setDefaultFontSize($this->fontSize);
         $this->phpWord->setDefaultParagraphStyle(['align' => 'left', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $this->phpWord->addParagraphStyle('indented', ['spaceAfter' => 100, 'spaceBefore' => 100, 'align' => 'both', 'indentation' => ['firstLine' => 500]]);
+        $this->phpWord->addParagraphStyle('non_indented', ['spaceAfter' => 100, 'spaceBefore' => 100, 'align' => 'both']);
+        $this->phpWord->addParagraphStyle('left_aligned', ['align' => 'left', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $this->phpWord->addParagraphStyle('right_aligned', ['align' => 'right', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $this->phpWord->addParagraphStyle('center_aligned', ['align' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
+        $this->phpWord->addParagraphStyle('header', ['spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'left', 'indentation' => ['right' => 4000]]);
         $this->phpWord->addTitleStyle(1, ['bold' => true], ['spaceAfter' => 200, 'spaceBefore' => 200, 'align' => 'center']);
         $this->phpWord->addTitleStyle(11, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 200, 'align' => 'center']);
         $this->phpWord->addTitleStyle(12, ['bold' => true], ['spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'center']);
@@ -169,21 +224,81 @@ class Parsedown
         $this->phpWord->addNumberingStyle('decimal', ['type' => 'multilevel','levels' => [['format' => 'decimal', 'text' => '%1.', 'left' => 720, 'hanging' => 720, 'tabPos' => 720], ['format' => 'decimal', 'text' => '%2.', 'left' => 1000, 'hanging' => 720, 'tabPos' => 1000]]]);
         $this->phpWord->addNumberingStyle('bullet', ['type' => 'multilevel', 'levels' => [['format' => 'bullet', 'text' => '-', 'left' => 520, 'hanging' => 200, 'tabPos' => 520], ['format' => 'bullet', 'text' => '-', 'left' => 880, 'hanging' => 200, 'tabPos' => 880], ['format' => 'bullet', 'text' => '-', 'left' => 1080, 'hanging' => 200, 'tabPos' => 1080]]]);
     
-        $this->section = $this->phpWord->addSection([
-            'marginTop' => 600,
-            'marginBottom' => 600,
-            'marginRight' => 800,
-            'marginLeft' => 800]);
+        $this->section = $this->phpWord->addSection();
+        $this->setPhpWordMargins();
     }
 
-    public function getVarConverter()
+    #
+    # PhpWord specific margin setter
+    #
+
+    protected function setPhpWordMargins()
     {
-        return $this->varConverter;
+        if ($this->section)
+        {
+            $this->section->setStyle([
+                'marginTop' => \PhpOffice\PhpWord\Shared\Converter::cmToTwip($this->marginTop),
+                'marginBottom' => \PhpOffice\PhpWord\Shared\Converter::cmToTwip($this->marginBottom),
+                'marginRight' => \PhpOffice\PhpWord\Shared\Converter::cmToTwip($this->marginRight),
+                'marginLeft' => \PhpOffice\PhpWord\Shared\Converter::cmToTwip($this->marginLeft),
+            ]);
+        }
     }
 
-    public function setVarConverter($varConverter)
+    #
+    # PhpOdt specific margin setter
+    #
+
+    protected function setPhpOdtMargins()
     {
-        $this->varConverter = $varConverter;
+        if ($this->odtPageStyle)
+        {
+            $this->odtPageStyle->setVerticalMargin($this->marginTop.'cm', $this->marginBottom.'cm');
+            $this->odtPageStyle->setHorizontalMargin($this->marginLeft.'cm', $this->marginRight.'cm');
+        }
+    }
+
+    #
+    # Output mode setter and getter
+    #
+
+    public function setOutputMode($mode, $initialize = true)
+    {
+        if (!in_array($mode, array(self::TYPE_ODT, self::TYPE_DOCX, self::TYPE_HTML)))
+        {
+            throw new Exception('Unknown document type');
+        }
+
+        $this->outputMode = $mode;
+        
+        if ($initialize)
+        {
+            $this->initializeSharedParameters();
+
+            if ($mode == self::TYPE_ODT)
+            {
+                $this->initializeOdtParameters();
+            }
+            elseif ($mode == self::TYPE_DOCX)
+            {
+                $this->initializePhpWordParameters();
+            }
+        }
+    }
+
+    public function getOutputMode()
+    {
+        return $this->outputMode;
+    }
+
+    #
+    # PhpWord instance setter and getter
+    #
+
+    public function setPhpWord(\PhpOffice\PhpWord\PhpWord $phpWord)
+    {
+        $this->outputMode = self::TYPE_DOCX;
+        $this->phpWord = $phpWord;
     }
 
     public function getPhpWord()
@@ -191,30 +306,195 @@ class Parsedown
         return $this->phpWord;
     }
 
-    public function setPhpWord(\PhpOffice\PhpWord\PhpWord $phpWord)
+    #
+    # VariableConverter setter and getter
+    #
+
+    public function setVarConverter(VariableConverter $varConverter)
     {
-        $this->phpWord = $phpWord;
+        $this->varConverter = $varConverter;
     }
 
-    function getTree($text)
+    public function getVarConverter()
+    {
+        return $this->varConverter;
+    }
+
+    #
+    # Font name setter and getter
+    #
+
+    public function setFontName($fontName)
+    {
+        $this->fontName = $fontName;
+
+        if ($this->outputMode == self::TYPE_DOCX && $this->phpWord)
+        {
+            $this->phpWord->setDefaultFontName($this->fontName);
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt)
+        {
+            foreach ($this->odtTextStyles as $name => $style)
+            {
+                $style->setFontName($this->fontName);
+            }
+        }
+    }
+
+    public function getFontName()
+    {
+        return $this->fontName;
+    }
+
+    #
+    # Font size setter and getter
+    #
+
+    public function setFontSize($size)
+    {
+        $this->fontSize = $size;
+
+        if ($this->outputMode == self::TYPE_DOCX && $this->phpWord)
+        {
+            $this->phpWord->setDefaultFontSize($this->fontSize);
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt)
+        {
+            foreach ($this->odtTextStyles as $name => $style)
+            {
+                $style->setFontSize($this->fontSize);
+            }
+        }
+    }
+
+    public function getFontSize()
+    {
+        return $this->fontSize;
+    }
+
+    #
+    # Margin setters and getters
+    #
+
+    public function setMargins($marginTop, $marginRight, $marginBottom = null, $marginLeft = null)
+    {
+        $this->marginTop = $marginTop;
+        $this->marginRight = $marginRight;
+        $this->marginBottom = $marginBottom ? $marginBottom : $marginTop;
+        $this->marginLeft = $marginLeft ? $marginLeft : $marginRight;
+
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            $this->setPhpWordMargins();
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        {
+            $this->setPhpOdtMargins();
+        }
+    }
+
+    public function setMarginTop($marginTop)
+    {
+        $this->marginTop = $marginTop;
+
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            $this->setPhpWordMargins();
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        {
+            $this->setPhpOdtMargins();
+        }
+    }
+
+    public function setMarginRight($marginRight)
+    {
+        $this->marginRight = $marginRight;
+        
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            $this->setPhpWordMargins();
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        {
+            $this->setPhpOdtMargins();
+        }
+    }
+
+    public function setMarginBottom($marginBottom)
+    {
+        $this->marginBottom = $marginBottom;
+        
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            $this->setPhpWordMargins();
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        {
+            $this->setPhpOdtMargins();
+        }
+    }
+
+    public function setMarginLeft($marginLeft)
+    {
+        $this->marginLeft = $marginLeft;
+        
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            $this->setPhpWordMargins();
+        }
+        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        {
+            $this->setPhpOdtMargins();
+        }
+    }
+
+    public function getMarginTop()
+    {
+        return $this->marginTop;
+    }
+
+    public function getMarginRight()
+    {
+        return $this->marginRight;
+    }
+
+    public function getMarginBottom()
+    {
+        return $this->marginBottom;
+    }
+
+    public function getMarginLeft()
+    {
+        return $this->marginLeft;
+    }
+
+    #
+    # Ordered lists type: true => roman, false => decimal
+    #
+
+    public function setListToRoman($roman = true)
+    {
+        $this->listIsRoman = (bool) $roman;
+    }
+
+    public function isListRoman()
+    {
+        return $this->listIsRoman;
+    }
+
+    #
+    # Convenient public parse tree method
+    #
+
+    public function getParseTree($text)
     {
         return $this->textElements($text);
     }
 
-    function getHtmlFromTree(array $elements)
-    {
-        return trim($this->elements($elements), "\n");
-    }
-
-    function getDocxFromTree(array $elements)
-    {
-        return $this->elementsDocx($elements);
-    }
-
-    function getOdtFromTree(array $elements)
-    {
-        return $this->elementsOdt($elements);
-    }
+    #
+    # Main method to process multi-line text
+    #
 
     function text($text)
     {
@@ -222,6 +502,11 @@ class Parsedown
         $Elements = $this->textElements($text);
 
         # convert
+        if (!$this->outputMode)
+        {
+            throw new Exception('Output mode not set');
+        }
+
         if ($this->outputMode == self::TYPE_ODT)
         {
             $markup = $this->elementsOdt($Elements);
@@ -233,10 +518,6 @@ class Parsedown
         elseif ($this->outputMode == self::TYPE_HTML)
         {
             $markup = $this->elements($Elements);
-        }
-        else
-        {
-            throw new Exception('Unknown document type');
         }
 
         # trim line breaks
@@ -776,7 +1057,7 @@ class Parsedown
         $Block = array(
             'element' => array(
                 'name' => 'h' . $level,
-                'htext' => $text,
+                'text' => $text,
             ),
         );
 
@@ -1131,12 +1412,14 @@ class Parsedown
             return;
         }
 
-        if (chop($Line['text'], ' -:|') !== '')
+        if (chop($Line['text'], ' -:|.0123456789') !== '')
         {
             return;
         }
 
         $alignments = array();
+        $widths = array();
+        $specifiedWidths = false;
 
         $divider = $Line['text'];
 
@@ -1155,6 +1438,7 @@ class Parsedown
             }
 
             $alignment = null;
+            $width = null;
 
             if ($dividerCell[0] === ':')
             {
@@ -1167,6 +1451,15 @@ class Parsedown
             }
 
             $alignments []= $alignment;
+
+            preg_match('~\d+(?:\.\d+)?~', $dividerCell, $matches); // floats
+            if (isset($matches[0]))
+            {
+                $width = $matches[0];
+                $specifiedWidths = true;
+            }
+
+            $widths[] = $width;
         }
 
         # ~
@@ -1191,6 +1484,8 @@ class Parsedown
 
             $HeaderElement = array(
                 'name' => 'th',
+                'width' => $widths[$index],
+                'alignment' => $alignments[$index],
                 'handler' => array(
                     'function' => 'lineElements',
                     'argument' => $headerCell,
@@ -1198,13 +1493,20 @@ class Parsedown
                 )
             );
 
-            if (isset($alignments[$index]))
+            if (isset($alignments[$index]) || isset($widths[$index]))
             {
-                $alignment = $alignments[$index];
-
-                $HeaderElement['attributes'] = array(
-                    'style' => "text-align: $alignment;",
-                );
+                $HeaderElement['attributes']['style'] = '';
+                if (isset($alignments[$index]))
+                {
+                    $alignment = $alignments[$index];
+                    $HeaderElement['attributes']['style'] .= "text-align: $alignment;";
+                }
+    
+                if (isset($widths[$index]))
+                {
+                    $width = $widths[$index];
+                    $HeaderElement['attributes']['style'] .= 'width: '.\PhpOffice\PhpWord\Shared\Converter::cmToPixel($width).'px;';
+                }
             }
 
             $HeaderElements []= $HeaderElement;
@@ -1214,9 +1516,11 @@ class Parsedown
 
         $Block = array(
             'alignments' => $alignments,
+            'widths' => $widths,
             'identified' => true,
             'element' => array(
                 'name' => 'table',
+                'specified_widths' => $specifiedWidths,
                 'elements' => array(),
             ),
         );
@@ -1264,6 +1568,8 @@ class Parsedown
 
                 $Element = array(
                     'name' => 'td',
+                    'width' => $Block['widths'][$index],
+                    'alignment' => $Block['alignments'][$index],
                     'handler' => array(
                         'function' => 'lineElements',
                         'argument' => $cell,
@@ -1271,11 +1577,18 @@ class Parsedown
                     )
                 );
 
-                if (isset($Block['alignments'][$index]))
+                if (isset($Block['alignments'][$index]) || isset($Block['widths'][$index]))
                 {
-                    $Element['attributes'] = array(
-                        'style' => 'text-align: ' . $Block['alignments'][$index] . ';',
-                    );
+                    $Element['attributes']['style'] = '';
+                    if (isset($Block['alignments'][$index]))
+                    {
+                        $Element['attributes']['style'] .= 'text-align: ' . $Block['alignments'][$index] . ';';
+                    }
+    
+                    if (isset($Block['widths'][$index]))
+                    {
+                        $Element['attributes']['style'] .= 'width: ' . \PhpOffice\PhpWord\Shared\Converter::cmToPixel($Block['widths'][$index]) . 'px;';
+                    }
                 }
 
                 $Elements []= $Element;
@@ -1346,22 +1659,32 @@ class Parsedown
     protected $inlineMarkerList = '!*_&[:<`~\\$';
 
     #
-    # ~
+    # Main method to process single-line text
     #
 
     public function line($text, $nonNestables = array())
     {
-        return $this->elements($this->lineElements($text, $nonNestables));
-    }
-    
-    public function lineDocx($text, $nonNestables = array())
-    {
-        return $this->elementsDocx($this->lineElements($text, $nonNestables));
-    }
-    
-    public function lineOdt($text, $nonNestables = array())
-    {
-        return $this->elementsOdt($this->lineElements($text, $nonNestables));
+        $lineElements = $this->lineElements($text, $nonNestables);
+
+        if (!$this->outputMode)
+        {
+            throw new Exception('Output mode not set');
+        }
+
+        if ($this->outputMode == self::TYPE_ODT)
+        {
+            $markup = $this->elementsOdt($lineElements);
+        }
+        elseif ($this->outputMode == self::TYPE_DOCX)
+        {
+            $markup = $this->elementsDocx($lineElements);
+        }
+        elseif ($this->outputMode == self::TYPE_HTML)
+        {
+            $markup = $this->elements($lineElements);
+        }
+
+        return $markup;
     }
 
     protected function lineElements($text, $nonNestables = array())
@@ -2038,17 +2361,46 @@ class Parsedown
                 if ($hasName && $Element['name'] == 'var')
                 {
                     $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
-                    if (is_array($value) && isset($value['markdown'], $value['text']))
+
+                    // handle variable value 
+                    if (is_array($value))
                     {
-                        // TODO: check existence of $tree[0]['handler']['argument']
-                        $tree = $this->getTree($value['text']);
-                        $markup .= $this->elements($this->lineElements($tree[0]['handler']['argument']));
+                        // value is array
+                        if (isset($value['markdown'], $value['text']) && $value['text'])
+                        {
+                            if ($value['markdown'])
+                            {
+                                // value is markdown text, so parse it and handle elements
+                                $tree = $this->textElements($value['text']);
+                                if (isset($tree[0]['handler']['argument']))
+                                {
+                                    $md = $tree[0]['handler']['argument'];
+                                    if (strstr($md, PHP_EOL))
+                                    {
+                                        // multi-line string
+                                        $markup .= $this->text($md);
+                                    }
+                                    else
+                                    {
+                                        // single-line string
+                                        $markup .= $this->line($md);
+                                    }
+                                }
+                                else
+                                {
+                                    $markup .= $this->elements($tree);
+                                }
+                            }
+                            else
+                            {
+                                $markup .= $value['text'];
+                            }
+                        }
                     }
                     else
                     {
                         $markup .= $value;
                     }
-                    
                 }
                 else
                 {
@@ -2091,9 +2443,15 @@ class Parsedown
 
         if ($hasName)
         {
-
-            if ($Element['name'] == 'p') {
-                $this->textRun = $this->section->addTextRun();
+            if ($Element['name'] == 'p')
+            {
+                switch ($this->paragraphDepth)
+                {
+                    case 0: $pStyle = 'non_indented'; break;
+                    case 1: $pStyle = 'indented'; break;
+                    default: $pStyle = null;
+                }
+                $this->textRun = $this->section->addTextRun($pStyle);
             }
             elseif ($Element['name'] == 'strong')
             {
@@ -2111,10 +2469,10 @@ class Parsedown
             {
                 if (isset($Element['attributes']['src']))
                 {
-                    $options = [];
+                    $options = array();
                     if (isset($Element['attributes']['alt']) && $Element['attributes']['alt'])
                     {
-                        $altArgs = explode(',',$Element['attributes']['alt']);
+                        $altArgs = explode(',', $Element['attributes']['alt']);
                         $countArgs = count($altArgs);
                         $height = 0;
                         $width = 0;
@@ -2132,43 +2490,124 @@ class Parsedown
                         {
                             $options['width'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($width);
                         }
-                        
                     }
-                    $this->section->addImage($Element['attributes']['src'], $options);
+                    if ($this->textRun != null)
+                    {
+                        $this->textRun->addImage($Element['attributes']['src'], $options);
+                    }
+                    else
+                    {
+                        $this->section->addImage($Element['attributes']['src'], $options);
+                    }
                 }
             }
-            elseif ($Element['name'] == 'h1')
+            elseif (in_array($Element['name'], array('h1', 'h2', 'h3', 'h4')))
             {
-                $this->section->addTitle($Element['htext'], 1);
+                switch ($Element['name'])
+                {
+                    case 'h2': $titleLevel = 11; break;
+                    case 'h3': $titleLevel = 12; break;
+                    case 'h4': $titleLevel = 13; break;
+                    default: $titleLevel = 1;
+                }
+                $this->section->addTitle($Element['text'], $titleLevel);
             }
-            elseif ($Element['name'] == 'h2')
-            {
-                $this->section->addTitle($Element['htext'], 11);
-            }
-            elseif ($Element['name'] == 'h3')
-            {
-                $this->section->addTitle($Element['htext'], 12);
-            }
-            elseif ($Element['name'] == 'h4')
-            {
-                $this->section->addTitle($Element['htext'], 13);
-            }
-            elseif ($Element['name'] == 'ol')
+            elseif (in_array($Element['name'], array('ol', 'ul')))
             {
                 $parentListStyle = $this->listStyleName;
                 $this->listDepth += 1;
-                $this->listStyleName = 'roman';
-            }
-            elseif ($Element['name'] == 'ul')
-            {
-                $parentListStyle = $this->listStyleName;
-                $this->listDepth += 1;
-                $this->listStyleName = 'bullet';
+                $this->listStyleName = $Element['name'] == 'ol' ? ($this->listIsRoman ? 'roman' : 'decimal') : 'bullet';
             }
             elseif ($Element['name'] == 'li')
             {
                 $this->textRun = $this->section->addListItemRun($this->listDepth, $this->listStyleName);
             }
+            elseif ($Element['name'] == 'hr')
+            {
+                $this->section->addTextBreak();
+            }
+            elseif ($Element['name'] == 'br')
+            {
+                if ($this->textRun != null)
+                {
+                    $this->textRun->addTextBreak();
+                }
+                else
+                {
+                    $this->section->addTextBreak();
+                }
+            }
+            elseif ($Element['name'] == 'blockquote')
+            {
+                $this->paragraphDepth += 1;
+                // $parentPStyle = $this->pStyle;
+                // $this->pStyle = 'indented';
+            }
+            elseif ($Element['name'] == 'table')
+            {
+                $tableStyle = array();
+                if (!$Element['specified_widths'])
+                {
+                    // if column widths not specified, set the table width to 100%
+                    $tableStyle['unit'] = \PhpOffice\PhpWord\SimpleType\TblWidth::PERCENT;
+                    $tableStyle['width'] = 50 * 100;
+                }
+                
+                $this->table = $this->section->addTable($tableStyle);
+            }
+            elseif ($Element['name'] == 'tr')
+            {
+                // Check if text of table headers exists.
+                // If no text supplied, the table header row won't be created.
+                $thHasText = false;
+                if ($this->isTh && $Element['elements'])
+                {
+                    foreach ($Element['elements'] as $el)
+                    {
+                        if ($el['name'] == 'th' && trim($el['handler']['argument']) !== '')
+                        {
+                            $thHasText = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$this->isTh || $thHasText)
+                {
+                    $this->row = $this->table->addRow();
+                }
+                
+            }
+            elseif ($Element['name'] == 'td' || $Element['name'] == 'th')
+            {
+                if (isset($Element['alignment']))
+                {
+                    $parentPStyleCell = $this->pStyleCell;
+                    switch ($Element['alignment'])
+                    {
+                        case 'left': $this->pStyleCell = 'left_aligned'; break;
+                        case 'right': $this->pStyleCell = 'right_aligned'; break;
+                        case 'center': $this->pStyleCell = 'center_aligned'; break;
+                    }
+                }
+
+                // Create cell only if row exists.
+                // Row won't exist if no table header text supplied.
+                if ($this->row)
+                {
+                    $this->cell = $this->row->addCell(isset($Element['width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['width']) : null);
+                    $this->textRun = $this->cell->addTextRun($this->pStyleCell);
+                }
+            }
+            elseif ($Element['name'] == 'thead')
+            {
+                $this->isTh = true;
+            }
+            elseif ($Element['name'] == 'tbody')
+            {
+                $this->isTh = false;
+            }
+
 
             /*
             $markup .= '<' . $Element['name'];
@@ -2225,45 +2664,75 @@ class Parsedown
             }
             else
             {
-                if ($hasName && $Element['name'] == 'var')
+                if ($hasName)
                 {
-                    $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
-
-                    // handle variable value 
-                    if (is_array($value))
+                    if ($Element['name'] == 'var')
                     {
-                        // value is array
-                        if (isset($value['markdown'], $value['text']) && $value['markdown'] && $value['text'])
+                        $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
+
+                        // handle variable value 
+                        if (is_array($value))
                         {
-                            // value is markdown text, so parse it and handle elements
-                            $tree = $this->getTree($value['text']);
-                            if (isset($tree[0]['handler']['argument']))
+                            // value is array
+                            if (isset($value['markdown'], $value['text']) && $value['text'] != '')
                             {
-                                $markup .= $this->lineDocx($tree[0]['handler']['argument']);
+                                if ($value['markdown'])
+                                {
+                                    // value is markdown text, so parse it and handle elements
+                                    $tree = $this->textElements($value['text']);
+                                    if (isset($tree[0]['handler']['argument']))
+                                    {
+                                        $md = $tree[0]['handler']['argument'];
+                                        if (strstr($md, PHP_EOL))
+                                        {
+                                            // multi-line string
+                                            $markup .= $this->text($md);
+                                        }
+                                        else
+                                        {
+                                            // single-line string
+                                            $markup .= $this->line($md);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        $markup .= $this->elementsDocx($tree);
+                                    }
+                                }
+                                else
+                                {
+                                    $this->addText($value['text']);
+                                }
                             }
                         }
+                        else
+                        {
+                            $this->addText($value);
+                        }
+                    }
+                    elseif (in_array($Element['name'], array('h1', 'h2', 'h3', 'h4')))
+                    {
+                        // do nothing!
                     }
                     else
                     {
-                        // value is text
-                        if ($value)
-                        {
-                            $this->textRun->addText($value, $this->options);
-                        }
+                        $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
                     }
+                    
                 }
                 else
                 {
-                    if ($text)
-                    {
-                        $this->textRun->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->options);
-                    }
+                    $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
                 }
             }
 
             if ($hasName)
             {
-                if ($Element['name'] == 'strong')
+                if ($Element['name'] == 'p')
+                {
+                    $this->textRun = null;
+                }
+                elseif ($Element['name'] == 'strong')
                 {
                     $this->options['bold'] = false;
                 }
@@ -2275,10 +2744,38 @@ class Parsedown
                 {
                     $this->options['underline'] = 'none';
                 }
-                elseif ($Element['name'] == 'ul' || $Element['name'] == 'ol')
+                elseif (in_array($Element['name'], array('ul', 'ol')))
                 {
+                    $this->textRun = null;
                     $this->listStyleName = $parentListStyle;
                     $this->listDepth -= 1;
+                }
+                elseif ($Element['name'] == 'blockquote')
+                {
+                    // $this->pStyle = $parentPStyle;
+                    $this->paragraphDepth -= 1;
+                }
+                elseif ($Element['name'] == 'table')
+                {
+                    $this->table = null;
+                }
+                elseif ($Element['name'] == 'tr')
+                {
+                    $this->row = null;
+                }
+                elseif ($Element['name'] == 'td' || $Element['name'] == 'th')
+                {
+                    if (isset($Element['alignment']))
+                    {
+                        $this->pStyleCell = $parentPStyleCell;
+                    }
+
+                    $this->cell = null;
+                    $this->textRun = null;
+                }
+                elseif ($Element['name'] == 'thead' || $Element['name'] == 'tbody')
+                {
+                    $this->isTh = null;
                 }
             }
 
@@ -2288,13 +2785,75 @@ class Parsedown
         }
         elseif ($hasName)
         {
-            //$this->options = [];
+            //$this->options = array();
             /*
             $markup .= ' />';
             */
         }
 
         return $markup;
+    }
+
+    #
+    # Convenient method to add text to current paragraph
+    #
+
+    protected function addText($text)
+    {
+        if ($this->outputMode == self::TYPE_DOCX)
+        {
+            if ($this->textRun != null)
+            {
+                if ($text)
+                {
+                    /*
+                    var_dump('addText', $text);
+                    */
+                    if ($this->elementIsBr($text))
+                    {
+                        $this->textRun->addTextBreak();
+                    }
+                    else
+                    {
+                        $this->textRun->addText($text, $this->options);
+                    }
+                }
+                
+            }
+            /*
+            else
+            {
+                throw new Exception('Undefined element to call addText on');
+            }
+            */
+        }
+        elseif ($this->outputMode == self::TYPE_ODT)
+        {
+            if ($this->p != null)
+            {
+                if ($text)
+                {
+                    /*
+                    var_dump('addText', $text);
+                    */
+                    if ($this->elementIsBr($text))
+                    {
+                        $this->p->addLineBreak();
+                    }
+                    else
+                    {
+                        $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
+                    }
+                }
+                
+            }
+            /*
+            else
+            {
+                throw new Exception('Undefined element to call addText on');
+            }
+            */
+        }
     }
 
     protected function elementOdt(array $Element)
@@ -2339,7 +2898,7 @@ class Parsedown
                 {
                     $height = 0;
                     $width = 0;
-                    $options = [];
+                    $options = array();
                     if (isset($Element['attributes']['alt']) && $Element['attributes']['alt'])
                     {
                         $altArgs = explode(',',$Element['attributes']['alt']);
@@ -2365,7 +2924,7 @@ class Parsedown
             elseif (in_array($Element['name'], ['h1', 'h2', 'h3', 'h4']))
             {
                 $p = new Paragraph($this->getOdtParagraphStyle($Element['name']));
-                $p->addText($Element['htext'], $this->getOdtTextStyle('bold'));
+                $p->addText($Element['text'], $this->getOdtTextStyle('bold'));
             }
             elseif ($Element['name'] == 'ol')
             {
@@ -2373,7 +2932,7 @@ class Parsedown
 
                 $parentListStyle = $this->listStyleName;
                 $this->listDepth += 1;
-                $this->listStyleName = 'roman';
+                $this->listStyleName = $this->listIsRoman ? 'roman' : 'decimal';
 
                 if ($this->listDepth > 0)
                 {
@@ -2417,6 +2976,21 @@ class Parsedown
             {
                 var_dump('>li'.$this->listDepth);
                 $this->p = new Paragraph();
+            }
+            elseif ($Element['name'] == 'hr')
+            {
+                new Paragraph();
+            }
+            elseif ($Element['name'] == 'br')
+            {
+                if ($this->p != null)
+                {
+                    $this->p->addLineBreak();
+                }
+                else
+                {
+                    new Paragraph();
+                }
             }
 
             /*
@@ -2474,45 +3048,75 @@ class Parsedown
             }
             else
             {
-                if ($hasName && $Element['name'] == 'var')
+                if ($hasName)
                 {
-                    $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
-
-                    // handle variable value 
-                    if (is_array($value))
+                    if ($Element['name'] == 'var')
                     {
-                        // value is array
-                        if (isset($value['markdown'], $value['text']) && $value['markdown'] && $value['text'])
+                        $value = $this->varConverter->evaluate($Element['key'], $Element['params']);
+
+                        // handle variable value 
+                        if (is_array($value))
                         {
-                            // value is markdown text, so parse it and handle elements
-                            $tree = $this->getTree($value['text']);
-                            if (isset($tree[0]['handler']['argument']))
+                            // value is array
+                            if (isset($value['markdown'], $value['text']) && $value['text'])
                             {
-                                $markup .= $this->lineOdt($tree[0]['handler']['argument']);
+                                if ($value['markdown'])
+                                {
+                                    // value is markdown text, so parse it and handle elements
+                                    $tree = $this->textElements($value['text']);
+                                    if (isset($tree[0]['handler']['argument']))
+                                    {
+                                        $md = $tree[0]['handler']['argument'];
+                                        if (strstr($md, PHP_EOL))
+                                        {
+                                            // multi-line string
+                                            $markup .= $this->text($md);
+                                        }
+                                        else
+                                        {
+                                            // single-line string
+                                            $markup .= $this->line($md);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        $markup .= $this->elementsOdt($tree);
+                                    }
+                                }
+                                else
+                                {
+                                    $this->addText($value['text']);
+                                }
                             }
                         }
+                        else
+                        {
+                            $this->addText($value);
+                        }
+                    }
+                    elseif (in_array($Element['name'], array('h1', 'h2', 'h3', 'h4')))
+                    {
+                        // do nothing!
                     }
                     else
                     {
-                        // value is text
-                        if ($value)
-                        {
-                            $this->p->addText($value, $this->wordOptionsToOdtTextStyle($this->options));
-                        }
+                        $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
                     }
+                    
                 }
                 else
                 {
-                    if ($text)
-                    {
-                        $this->p->addText(!$permitRawHtml ? self::escape($text, true) : $text, $this->wordOptionsToOdtTextStyle($this->options));
-                    }
+                    $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
                 }
             }
 
             if ($hasName)
             {
-                if ($Element['name'] == 'strong')
+                if ($Element['name'] == 'p')
+                {
+                    $this->p = null;
+                }
+                elseif ($Element['name'] == 'strong')
                 {
                     $this->options['bold'] = false;
                 }
@@ -2534,6 +3138,7 @@ class Parsedown
                     }
                     $this->listStyleName = $parentListStyle;
                     $this->listDepth -= 1;
+                    $this->list = null;
                 }
                 elseif ($Element['name'] == 'li')
                 {
@@ -2559,7 +3164,7 @@ class Parsedown
         }
         elseif ($hasName)
         {
-            //$this->options = [];
+            //$this->options = array();
             /*
             $markup .= ' />';
             */
@@ -2839,6 +3444,15 @@ class Parsedown
             $text .= $key == 'em' && $val ? '*' : ($key == 'strong' && $val ? '**' : ($key == 'u' && $val ? '_' : ''));
         }
         return $text;
+    }
+    
+    #
+    # Checks if supplied markup is a <br> tag
+    #
+
+    protected function elementIsBr($markup)
+    {
+        return preg_match("/^<br\W*?\/?>$/", $markup);
     }
 
     #

@@ -6,7 +6,7 @@ include_once 'phpodt/phpodt.php';
 
 // ~~~~~~~~~~~~~ DB BEGIN ~~~~~~~~~~~~~
 
-$idPredmet = 4780; // IIVK 1/20 - Slavica Periz
+$idPredmet = 4818; // IIVK 25/20 - Slavica Periz
 $host = '127.0.0.1';
 $db   = 'slavica_periz_so_izv';
 $user = 'root';
@@ -31,6 +31,15 @@ $getIzvrsitelj = function() use ($pdo) {
     return $izv['ime'].' '.$izv['prezime'];
 };
 
+$textcaseParamFn = function(&$text, $case) {
+    $caseLc = strtolower($case);
+    if ($caseLc == 'upper') {
+        $text = mb_strtoupper($text, 'UTF-8');
+    } elseif ($caseLc == 'lower') {
+        $text = mb_strtolower($text, 'UTF-8');
+    }
+};
+
 $getKancelarija = function() use ($pdo) {
     $stmt = $pdo->query('SELECT k.*, m.naziv AS mesto FROM kancelarija k LEFT JOIN mesto m ON k.id_mesto = m.id ORDER BY k.id LIMIT 1');
     $kanc = $stmt->fetch();
@@ -44,30 +53,69 @@ $getOznaka = function() use ($pdo, $idPredmet) {
     return $predmet['upisnik'] . ' ' . $predmet['broj_predmeta'] . '/' . substr($predmet['godina'], 2);
 };
 
-$getIdentifikacioniBroj = function() use ($pdo, $idPredmet) {
-    $stmt = $pdo->prepare('SELECT identifikacioni_broj FROM predmet WHERE id = ?');
+$getPredmet = function() use ($pdo, $idPredmet) {
+    $stmt = $pdo->prepare('SELECT * FROM predmet WHERE id = ?');
     $stmt->execute([$idPredmet]);
     $predmet = $stmt->fetch();
-    return $predmet['identifikacioni_broj'];
+    return $predmet;
 };
 
 $getDatumZop = function() use ($pdo, $idPredmet) {
     $stmt = $pdo->prepare('SELECT pa.datum_donosenja FROM predmet_akti pa WHERE pa.id_predmet = ? AND pa.id_akt = ? ORDER BY datum_donosenja DESC LIMIT 1');
     $stmt->execute([$idPredmet, 1]);
     $zop = $stmt->fetch();
-    return date('d.m.Y.', strtotime($zop['datum_donosenja']));
+    return $zop['datum_donosenja'];
 };
 
 $getPoverioci = function() {
     $povs = [];
-    $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД', 'adresa' => 'Нови Сад, ул. Филипа Вишњића бр. 47', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'advokat' => 'чији је пуномоћник адв. Звездан Живанов, Нови Сад, Владике Платона 8/2'];
-    $povs[] = ['ime' => 'Јустин Лугумерски', 'adresa' => 'Сомбор, ул. Чонопљански пут бб', 'maticni' => 'ЈМБГ 0211958810068', 'advokat' => 'чији је пуномоћник адв. Радован Зиндовић, Сомбор, Доситеја Обрадовића 15'];
+    $povs[] = ['ime' => 'ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД', 'adresa' => 'Нови Сад, ул. Филипа Вишњића бр. 47', 'maticni' => 'МБ 08831149, ПИБ 103635323', 'jedinicaRacun' => '', 'racun' => 'број рачуна 205-0000000128201-90 који се води код банке КОМЕРЦИЈАЛНА БАНКА А.Д. БЕОГРАД', 'advokat' => 'чији је пуномоћник адв. Звездан Живанов, Нови Сад, Владике Платона 8/2'];
     return $povs;
 };
 
-$poveriociParamFns = [function (&$poverioci, array $propsToShowWithEm) {
+$getDuznici = function() {
+    $duz = [];
+    $duz[] = ['ime' => 'Немања Радмановић', 'adresa' => 'Црвенка, ул. Лењинова бр. 74', 'maticni' => 'ЈМБГ 2602998820194', 'jedinicaRacun' => '', 'racun' => '', 'advokat' => ''];
+    return $duz;
+};
+
+$getRedovni = function() {
+    return ['broj_racuna' => '340-11412509-08', 'naziv_banke' => 'ERSTE BANK А.Д. НОВИ САД'];
+};
+
+$getIznosPredujma = function() {
+    return '5479.20';
+};
+
+$getPredmeta = function() {
+    $predmeta = 'предмета ';
+    return $predmeta;
+};
+
+$getPozivNaBroj = function() {
+    $oznaka = 'ИИВК 25/20';
+    $pozivNaBroj = $oznaka;
+    return $pozivNaBroj;
+};
+
+$getIspravu = function() {
+    return 'веродостојну';
+};
+
+$datumParamFn = function (&$datum, $format) {
+    if ($format) {
+        $datum = date($format, strtotime($datum));
+    }
+};
+
+$cenaParamFn = function (&$iznos, $tip) {
+    if ($tip == 'iznos') {
+        $iznos = number_format($iznos, 2, ',', '.');
+    }
+};
+
+$strankaFormatParamFn = function (&$poverioci, array $propsToShowWithEm) {
     if (!empty($propsToShowWithEm)) {
-        // propsToShowWithEm can contain MD emphasis so need to extract that
         $propsToShow = [];
         $propsEms = [];
         $pd = new Parsedown();
@@ -78,7 +126,7 @@ $poveriociParamFns = [function (&$poverioci, array $propsToShowWithEm) {
             $propsEms[$key] = $emMap;
         }
 
-        $properties = ['ime', 'adresa', 'maticni', 'advokat'];
+        $properties = ['ime', 'adresa', 'maticni', 'jedinicaRacun', 'racun', 'advokat'];
         $propsToHide = array_diff($properties, $propsToShow);
         foreach ($poverioci as $i => &$pov) {
             foreach ($properties as $prop) {
@@ -87,11 +135,11 @@ $poveriociParamFns = [function (&$poverioci, array $propsToShowWithEm) {
             }
         }
     }
-}];
+};
 
-$handlePoverioci = function($poverioci) {
+$handleStranke = function(array $poverioci) {
     $pd = new Parsedown();
-    $properties = ['ime', 'adresa', 'maticni', 'advokat'];
+    $properties = ['ime', 'adresa', 'maticni', 'jedinicaRacun', 'racun', 'advokat'];
     $text = '';
     $num = count($poverioci);
     foreach ($poverioci as $i => $pov) {
@@ -110,15 +158,216 @@ $handlePoverioci = function($poverioci) {
     return ['text' => $text, 'markdown' => true];
 };
 
+$getStavke = function() {
+    $stavke = [];
+    $stavke[] = [
+        'ukupno_sa_pdv' => '1728.000',
+        'ukupno_bez_pdv' => '1440.00',
+        'kolicina' => '1',
+        'kolicinaIskorisceno' => '1',
+        'cena_jm' => '1440.00',
+        'id_trosak' => '54',
+        'na_ime_stavka' => null,
+        'pdv' => '20',
+        'zaduzenje' => '1728.00',
+        'na_ime' => 'накнаде за припрему, вођење и архивирање предмета',
+        'naziv_troska' => 'Накнада за припрему, вођење и архивирање предмета',
+        'id_jedinica_mere' => null,
+        'clan_zakona' => '9',
+        'tarifni_broj' => '1',
+        'stav' => null,
+        'tacka' => null,
+        'jedinica_mere' => null,
+        'id_predmet' => '4818',
+        'id_tip_predujma' => '1',
+        'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    $stavke[] = [
+      'ukupno_sa_pdv' => '194.400',
+      'ukupno_bez_pdv' => '162.00',
+      'kolicina' => '3',
+      'kolicinaIskorisceno' => '3',
+      'cena_jm' => '54.00',
+      'id_trosak' => '56',
+      'na_ime_stavka' => 'стварних трошкова извршног поступка',
+      'pdv' => '20',
+      'zaduzenje' => '194.40',
+      'na_ime' => 'трошкова по члану 17.',
+      'naziv_troska' => 'Трошкови по члану 17.',
+      'id_jedinica_mere' => '3',
+      'clan_zakona' => '17',
+      'tarifni_broj' => null,
+      'stav' => null,
+      'tacka' => null,
+      'jedinica_mere' => 'комад/а',
+      'id_predmet' => '4818',
+      'id_tip_predujma' => '1',
+      'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    $stavke[] = [
+        'ukupno_sa_pdv' => '2520.000',
+        'ukupno_bez_pdv' => '2100.00',
+        'kolicina' => '7',
+        'kolicinaIskorisceno' => '7',
+        'cena_jm' => '300.00',
+        'id_trosak' => '62',
+        'na_ime_stavka' => null,
+        'pdv' => '20',
+        'zaduzenje' => '2520.00',
+        'na_ime' => 'накнаде за достављање поштом странкама, учесницима у поступку и суду',
+        'naziv_troska' => 'Достављање поштом странкама, учесницима у поступку и суду',
+        'id_jedinica_mere' => '3',
+        'clan_zakona' => '18',
+        'tarifni_broj' => '2',
+        'stav' => null,
+        'tacka' => null,
+        'jedinica_mere' => 'комад/а',
+        'id_predmet' => '4818',
+        'id_tip_predujma' => '1',
+        'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    $stavke[] = [
+        'ukupno_sa_pdv' => '345.600',
+        'ukupno_bez_pdv' => '288.00',
+        'kolicina' => '1',
+        'kolicinaIskorisceno' => '1',
+        'cena_jm' => '288.00',
+        'id_trosak' => '75',
+        'na_ime_stavka' => null,
+        'pdv' => '20',
+        'zaduzenje' => '345.60',
+        'na_ime' => 'накнаде за састављање решења о извршењу',
+        'naziv_troska' => 'Састављање решења о извршењу',
+        'id_jedinica_mere' => '3',
+        'clan_zakona' => '18',
+        'tarifni_broj' => '2',
+        'stav' => null,
+        'tacka' => null,
+        'jedinica_mere' => 'комад/а',
+        'id_predmet' => '4818',
+        'id_tip_predujma' => '1',
+        'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    $stavke[] = [
+        'ukupno_sa_pdv' => '345.600',
+        'ukupno_bez_pdv' => '288.00',
+        'kolicina' => '1',
+        'kolicinaIskorisceno' => '1',
+        'cena_jm' => '288.00',
+        'id_trosak' => '80',
+        'na_ime_stavka' => null,
+        'pdv' => '20',
+        'zaduzenje' => '345.60',
+        'na_ime' => 'накнаде за састављање решења о трошковима поступка',
+        'naziv_troska' => 'Састављање решења о трошковима поступка',
+        'id_jedinica_mere' => '3',
+        'clan_zakona' => '18',
+        'tarifni_broj' => '2',
+        'stav' => null,
+        'tacka' => null,
+        'jedinica_mere' => 'комад/а',
+        'id_predmet' => '4818',
+        'id_tip_predujma' => '1',
+        'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    $stavke[] = [
+      'ukupno_sa_pdv' => '345.600',
+      'ukupno_bez_pdv' => '288.00',
+      'kolicina' => '1',
+      'kolicinaIskorisceno' => '1',
+      'cena_jm' => '288.00',
+      'id_trosak' => '82',
+      'na_ime_stavka' => null,
+      'pdv' => '20',
+      'zaduzenje' => '345.60',
+      'na_ime' => 'накнаде за састављање закључка о предујму',
+      'naziv_troska' => 'Састављање закључка о предујму',
+      'id_jedinica_mere' => '3',
+      'clan_zakona' => '18',
+      'tarifni_broj' => '2',
+      'stav' => null,
+      'tacka' => null,
+      'jedinica_mere' => 'комад/а',
+      'id_predmet' => '4818',
+      'id_tip_predujma' => '1',
+      'naziv_tipa_predujma' => 'Основни предујам',
+    ];
+    return $stavke;
+};
+
+$handleStavke = function(array $stavke) {
+    // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
+    $num = count($stavke);
+    $text = '';
+    foreach ($stavke as $i => $si)
+    {
+        $stavkaSaPdv = $si['ukupno_sa_pdv'];
+        $stavkaBezPdv = $si['ukupno_bez_pdv'];
+        $text .= 'на име '.($si['na_ime_stavka'] ? $si['na_ime_stavka'] : $si['na_ime']);
+        $text .= ' износ од ' . number_format($stavkaSaPdv, 2, ',', '.') . ' динара';
+        if ($stavkaSaPdv != $stavkaBezPdv) {
+            $text .= ' ('.number_format($stavkaBezPdv, 2, ',', '.').' дин. + '.number_format($stavkaSaPdv-$stavkaBezPdv, 2, ',', '.').' дин на име '.$si['pdv'].'% ПДВ-а)';
+        }
+        $text .= $num-1 == $i ? '' : ', ';
+    }
+    return $text;
+};
+
+$handleStavkeList = function(array $stavke) {
+    // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
+    $num = count($stavke);
+    $text = '';
+    foreach ($stavke as $i => $si)
+    {
+        $text .= '- ';
+        $stavkaSaPdv = $si['ukupno_sa_pdv'];
+        $stavkaBezPdv = $si['ukupno_bez_pdv'];
+        $text .= 'на име '.($si['na_ime_stavka'] ? $si['na_ime_stavka'] : $si['na_ime']);
+        $text .= ' износ од ' . number_format($stavkaSaPdv, 2, ',', '.') . ' динара';
+        if ($stavkaSaPdv != $stavkaBezPdv) {
+            $text .= ' ('.number_format($stavkaBezPdv, 2, ',', '.').' дин. + '.number_format($stavkaSaPdv-$stavkaBezPdv, 2, ',', '.').' дин на име '.$si['pdv'].'% ПДВ-а)';
+        }
+        $text .= $num-1 == $i ? "\n" : "\n";
+    }
+    return ['text' => $text, 'markdown' => true];
+};
+$handleStavkeList2 = function(array $stavke) {
+    // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
+    $num = count($stavke);
+    $text = '';
+    foreach ($stavke as $i => $si)
+    {
+        // $text .= '- ';
+        $stavkaSaPdv = $si['ukupno_sa_pdv'];
+        $stavkaBezPdv = $si['ukupno_bez_pdv'];
+        $text .= 'на име '.($si['na_ime_stavka'] ? $si['na_ime_stavka'] : $si['na_ime']);
+        $text .= ' износ од ' . number_format($stavkaSaPdv, 2, ',', '.') . ' динара';
+        if ($stavkaSaPdv != $stavkaBezPdv) {
+            $text .= ' ('.number_format($stavkaBezPdv, 2, ',', '.').' дин. + '.number_format($stavkaSaPdv-$stavkaBezPdv, 2, ',', '.').' дин на име '.$si['pdv'].'% ПДВ-а)';
+        }
+        // $text .= $num-1 == $i ? "\n" : "\n";
+        $text .= ', ';
+    }
+    return ['text' => $text, 'markdown' => false];
+};
+
 // ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
 
 $varConverter = new VariableConverter();
-$varConverter->registerVariable('izvrsitelj', $getIzvrsitelj);
+$varConverter->registerVariable('izvrsitelj', $getIzvrsitelj, [$textcaseParamFn]);
 $varConverter->registerVariable('oznaka', $getOznaka);
-$varConverter->registerVariable('kancelarija', $getKancelarija, ['naziv', 'adresa', 'mesto', 'tel1', 'tel2', 'tel3', 'pib', 'maticni_broj']);
-$varConverter->registerVariable('identifikacioni_broj', $getIdentifikacioniBroj);
-$varConverter->registerVariable('datum_zop', $getDatumZop);
-$varConverter->registerCollectionVariable('poverioci', $getPoverioci, $handlePoverioci, $poveriociParamFns);
+$varConverter->registerVariable('kancelarija', $getKancelarija, [], ['naziv', 'adresa', 'mesto', 'tel1', 'tel2', 'tel3', 'pib', 'maticni_broj']);
+$varConverter->registerVariable('predmet', $getPredmet, [$datumParamFn], ['identifikacioni_broj', 'datum_prijema', 'broj_izvrsne_verodostojne_isprave']);
+$varConverter->registerVariable('datumZop', $getDatumZop, [$datumParamFn]);
+$varConverter->registerCollectionVariable('poverioci', $getPoverioci, $handleStranke, [$strankaFormatParamFn]);
+$varConverter->registerCollectionVariable('duznici', $getDuznici, $handleStranke, [$strankaFormatParamFn]);
+$varConverter->registerVariable('iznosPredujma', $getIznosPredujma, [$cenaParamFn]);
+$varConverter->registerVariable('redovni', $getRedovni, [], ['broj_racuna', 'naziv_banke']);
+$varConverter->registerVariable('predmeta', $getPredmeta);
+$varConverter->registerVariable('pozivNaBroj', $getPozivNaBroj);
+$varConverter->registerVariable('ispravu', $getIspravu);
+$varConverter->registerCollectionVariable('stavkePredujmaInline', $getStavke, $handleStavke);
+$varConverter->registerCollectionVariable('stavkePredujmaList', $getStavke, $handleStavkeList);
 
 /*
 
@@ -148,20 +397,21 @@ $type = Parsedown::TYPE_DOCX;
 // lists.mdd
 // escaping_special_characters.mdd
 // simple_variables_with_params.mdd
+// zop_items_inline.mdd
+// zop_items_list.mdd
 // test.mdd
-$inputFileFull = 'simple_variables_with_params.mdd';
+$inputFileFull = 'test.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
 
 
 $parsedown = new Parsedown($type);
+$parsedown->setBreaksEnabled(true);
 $parsedown->setVarConverter($varConverter);
 
-// $tree = $parsedown->getTree($text);
+// $tree = $parsedown->getParseTree($text);
 // var_dump($parsedown->lineElements($tree[0]['handler']['argument']));
-// var_dump($parsedown->getHtmlFromTree($tree));
-// $output = $parsedown->getDocxFromTree($tree);
 
 /*
 $map = [];
