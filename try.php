@@ -361,8 +361,8 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 */
 
 // $type = Parsedown::TYPE_HTML;
-// $type = Parsedown::TYPE_ODT;
-$type = Parsedown::TYPE_DOCX;
+$type = Parsedown::TYPE_ODT;
+// $type = Parsedown::TYPE_DOCX;
 
 //$phpWord = new \PhpOffice\PhpWord\PhpWord();
 //$odt = ODT::getInstance();

@@ -43,18 +43,18 @@ class Parsedown
     protected $paragraphDepth; // based on this property a paragraph style is chosen
     protected $listDepth;
     protected $listIsRoman; // boolean property: true => roman lists, false => decimal lists
+    protected $table;
+    protected $row;
+    protected $isTh; // true if in thead, false if in tbody
+    protected $pStyleCell; // holds the current pStyle name for table cell text
 
     // properties used for keeping phpword internal state
     protected $phpWord;
     protected $section; // holds the current section object
     protected $textRun; // holds the current textRun or listItemRun object
     protected $pStyle;
-    protected $pStyleCell; // holds the current pStyle name for table cell text runs
     protected $listStyleName;
-    protected $table;
-    protected $row;
     protected $cell;
-    protected $isTh; // true if in thead, false if in tbody
 
     // properties used for keeping phpodt internal state
     protected $odt;
@@ -65,6 +65,7 @@ class Parsedown
     protected $p; // holds the current Paragraph object
     protected $list; // holds the current ODTList object
     protected $odtFinishedListItems;
+    protected $tableRows;
 
     public function __construct($mode = null)
     {
@@ -89,6 +90,9 @@ class Parsedown
         $this->paragraphDepth = -1;
         $this->listDepth = -1;
         $this->listIsRoman = true;
+        $this->table = null;
+        $this->row = null;
+        $this->isTh = null;
     }
 
     protected function initializeOdtParameters()
@@ -102,6 +106,7 @@ class Parsedown
         $this->odtFinishedListItems = array();
         $this->p = null;
         $this->list = null;
+        $this->tableRows = null;
         
         $boldTextStyle = new TextStyle('bold');
         $boldTextStyle->setBold();
@@ -170,6 +175,29 @@ class Parsedown
         $heading4->setVerticalMargin('0cm', '0.2cm');
         $this->odtParagraphStyles[$heading4->getStyleName()] = $heading4;
 
+        $nonIndented = new ParagraphStyle('non_indented');
+        $nonIndented->setTextAlign(StyleConstants::JUSTIFY);
+        $nonIndented->setVerticalMargin('0.2cm', '0.2cm');
+        $this->odtParagraphStyles[$nonIndented->getStyleName()] = $nonIndented;
+        
+        $indented = new ParagraphStyle('indented');
+        $indented->setTextAlign(StyleConstants::JUSTIFY);
+        $indented->setTextIndent('1cm');
+        $indented->setVerticalMargin('0.2cm', '0.2cm');
+        $this->odtParagraphStyles[$indented->getStyleName()] = $indented;
+        
+        $centerAligned = new ParagraphStyle('center');
+        $centerAligned->setTextAlign(StyleConstants::CENTER);
+        $this->odtParagraphStyles[$centerAligned->getStyleName()] = $centerAligned;
+        
+        $leftAligned = new ParagraphStyle('left');
+        $leftAligned->setTextAlign(StyleConstants::LEFT);
+        $this->odtParagraphStyles[$leftAligned->getStyleName()] = $leftAligned;
+        
+        $rightAligned = new ParagraphStyle('right');
+        $rightAligned->setTextAlign(StyleConstants::RIGHT);
+        $this->odtParagraphStyles[$rightAligned->getStyleName()] = $rightAligned;
+
         $romanList = new ListStyle('roman');
         $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldTextStyle);
         $romanList->setNumberLevel(2, new NumberFormat('', '', 'I'), $boldTextStyle);
@@ -196,14 +224,11 @@ class Parsedown
     protected function initializePhpWordParameters()
     {
         $this->fontName = 'Times New Roman';
-        $this->pStyle = null;
+        // $this->pStyle = null;
         $this->pStyleCell = null;
         $this->textRun = null;
         $this->listStyleName = null;
-        $this->table = null;
-        $this->row = null;
         $this->cell = null;
-        $this->isTh = null;
 
         \PhpOffice\PhpWord\Settings::setOutputEscapingEnabled(true);
         $this->phpWord = new \PhpOffice\PhpWord\PhpWord();
@@ -1478,9 +1503,14 @@ class Parsedown
             return;
         }
 
+        $headerRowHasText = false;
         foreach ($headerCells as $index => $headerCell)
         {
             $headerCell = trim($headerCell);
+            if (!$headerRowHasText && $headerCell != '')
+            {
+                $headerRowHasText = true;
+            }
 
             $HeaderElement = array(
                 'name' => 'th',
@@ -1520,7 +1550,10 @@ class Parsedown
             'identified' => true,
             'element' => array(
                 'name' => 'table',
+                'widths' => $widths,
                 'specified_widths' => $specifiedWidths,
+                'row_num' => $headerRowHasText ? 0 : 1,
+                'column_num' => count($headerCells),
                 'elements' => array(),
             ),
         );
@@ -1598,6 +1631,8 @@ class Parsedown
                 'name' => 'tr',
                 'elements' => $Elements,
             );
+
+            $Block['element']['row_num'] += 1;
 
             $Block['element']['elements'][1]['elements'] []= $Element;
 
@@ -2831,7 +2866,7 @@ class Parsedown
         {
             if ($this->p != null)
             {
-                if ($text)
+                if ($text && ($text == ' ' || !ctype_space($text)))
                 {
                     /*
                     var_dump('addText', $text);
@@ -2917,8 +2952,16 @@ class Parsedown
                         $options['width'] = \PhpOffice\PhpWord\Shared\Converter::cmToPoint($width);
                     }
 
-                    $p = new Paragraph();
-                    $p->addImage($Element['attributes']['src'], "${width}cm", "${height}cm");
+                    if ($this->p != null)
+                    {
+                        $this->p->addImage($Element['attributes']['src'], "${width}cm", "${height}cm");
+                    }
+                    else
+                    {
+                        $p = new Paragraph();
+                        $p->addImage($Element['attributes']['src'], "${width}cm", "${height}cm");
+                    }
+                    
                 }
             }
             elseif (in_array($Element['name'], ['h1', 'h2', 'h3', 'h4']))
@@ -2991,6 +3034,81 @@ class Parsedown
                 {
                     new Paragraph();
                 }
+            }
+            elseif ($Element['name'] == 'blockquote')
+            {
+                $this->paragraphDepth += 1;
+                // $parentPStyle = $this->pStyle;
+                // $this->pStyle = 'indented';
+            }
+            elseif ($Element['name'] == 'table')
+            {
+                $rndString = substr(md5(microtime()),rand(0,26),5); // random 5 char string
+                $this->table = new Table($rndString);
+
+                $this->table->createColumns($Element['column_num']);
+                if ($Element['specified_widths'])
+                {
+                    for ($i = 0; $i < $Element['column_num']; ++$i)
+                    {
+                        if ($Element['widths'][$i])
+                        {
+                            $this->table->getColumnStyle($i)->setWidth($Element['widths'][$i].'cm');
+                        }
+                    }
+                }
+                
+                $this->tableRows = [];
+            }
+            elseif ($Element['name'] == 'tr')
+            {
+                // Check if text of table headers exists.
+                // If no text supplied, the table header row won't be created.
+                $thHasText = false;
+                if ($this->isTh && $Element['elements'])
+                {
+                    foreach ($Element['elements'] as $el)
+                    {
+                        if ($el['name'] == 'th' && trim($el['handler']['argument']) !== '')
+                        {
+                            $thHasText = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$this->isTh || $thHasText)
+                {
+                    $this->row = [];
+                }
+                
+            }
+            elseif ($Element['name'] == 'td' || $Element['name'] == 'th')
+            {
+                if (isset($Element['alignment']))
+                {
+                    $parentPStyleCell = $this->pStyleCell;
+                    switch ($Element['alignment'])
+                    {
+                        case 'left': $this->pStyleCell = 'left'; break;
+                        case 'right': $this->pStyleCell = 'right'; break;
+                        case 'center': $this->pStyleCell = 'center'; break;
+                    }
+                }
+
+                if (is_array($this->row))
+                {
+                    //$this->cell = $this->row->addCell(isset($Element['width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['width']) : null);
+                    $this->p = new Paragraph($this->getOdtParagraphStyle($this->pStyleCell));
+                }
+            }
+            elseif ($Element['name'] == 'thead')
+            {
+                $this->isTh = true;
+            }
+            elseif ($Element['name'] == 'tbody')
+            {
+                $this->isTh = false;
             }
 
             /*
@@ -3155,6 +3273,43 @@ class Parsedown
                         unset($this->odtFinishedListItems[$key]);
                         //var_dump('After unset:',$this->odtFinishedListItems);
                     }
+                }
+                elseif ($Element['name'] == 'blockquote')
+                {
+                    $this->paragraphDepth -= 1;
+                }
+                elseif ($Element['name'] == 'table')
+                {
+                    $this->table->addRows($this->tableRows);
+                    $this->tableRows = null;
+                    $this->table = null;
+                }
+                elseif ($Element['name'] == 'tr')
+                {
+                    if (is_array($this->row))
+                    {
+                        $this->tableRows[] = $this->row;
+                    }
+                    
+                    $this->row = null;
+                }
+                elseif ($Element['name'] == 'td' || $Element['name'] == 'th')
+                {
+                    if (isset($Element['alignment']))
+                    {
+                        $this->pStyleCell = $parentPStyleCell;
+                    }
+
+                    if (is_array($this->row))
+                    {
+                        $this->row[] = $this->p;
+                    }
+                    
+                    $this->p = null;
+                }
+                elseif ($Element['name'] == 'thead' || $Element['name'] == 'tbody')
+                {
+                    $this->isTh = null;
                 }
             }
 
