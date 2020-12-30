@@ -87,13 +87,8 @@ $getIznosPredujma = function() {
     return '5479.20';
 };
 
-$getPredmeta = function() {
-    $predmeta = 'предмета ';
-    return $predmeta;
-};
-
 $getPozivNaBroj = function() {
-    $oznaka = 'ИИВК 25/20';
+    $oznaka = 'предмета ИИВК 25/20';
     $pozivNaBroj = $oznaka;
     return $pozivNaBroj;
 };
@@ -327,28 +322,9 @@ $handleStavkeList = function(array $stavke) {
         if ($stavkaSaPdv != $stavkaBezPdv) {
             $text .= ' ('.number_format($stavkaBezPdv, 2, ',', '.').' дин. + '.number_format($stavkaSaPdv-$stavkaBezPdv, 2, ',', '.').' дин на име '.$si['pdv'].'% ПДВ-а)';
         }
-        $text .= $num-1 == $i ? "\n" : "\n";
+        $text .= PHP_EOL;
     }
     return ['text' => $text, 'markdown' => true];
-};
-$handleStavkeList2 = function(array $stavke) {
-    // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
-    $num = count($stavke);
-    $text = '';
-    foreach ($stavke as $i => $si)
-    {
-        // $text .= '- ';
-        $stavkaSaPdv = $si['ukupno_sa_pdv'];
-        $stavkaBezPdv = $si['ukupno_bez_pdv'];
-        $text .= 'на име '.($si['na_ime_stavka'] ? $si['na_ime_stavka'] : $si['na_ime']);
-        $text .= ' износ од ' . number_format($stavkaSaPdv, 2, ',', '.') . ' динара';
-        if ($stavkaSaPdv != $stavkaBezPdv) {
-            $text .= ' ('.number_format($stavkaBezPdv, 2, ',', '.').' дин. + '.number_format($stavkaSaPdv-$stavkaBezPdv, 2, ',', '.').' дин на име '.$si['pdv'].'% ПДВ-а)';
-        }
-        // $text .= $num-1 == $i ? "\n" : "\n";
-        $text .= ', ';
-    }
-    return ['text' => $text, 'markdown' => false];
 };
 
 // ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
@@ -363,7 +339,6 @@ $varConverter->registerCollectionVariable('poverioci', $getPoverioci, $handleStr
 $varConverter->registerCollectionVariable('duznici', $getDuznici, $handleStranke, [$strankaFormatParamFn]);
 $varConverter->registerVariable('iznosPredujma', $getIznosPredujma, [$cenaParamFn]);
 $varConverter->registerVariable('redovni', $getRedovni, [], ['broj_racuna', 'naziv_banke']);
-$varConverter->registerVariable('predmeta', $getPredmeta);
 $varConverter->registerVariable('pozivNaBroj', $getPozivNaBroj);
 $varConverter->registerVariable('ispravu', $getIspravu);
 $varConverter->registerCollectionVariable('stavkePredujmaInline', $getStavke, $handleStavke);

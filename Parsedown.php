@@ -2804,7 +2804,7 @@ class Parsedown
         {
             if ($this->textRun != null)
             {
-                if ($text)
+                if ($text && ($text == ' ' || !ctype_space($text)))
                 {
                     /*
                     var_dump('addText', $text);
