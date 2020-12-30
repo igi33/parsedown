@@ -186,15 +186,15 @@ class Parsedown
         $indented->setVerticalMargin('0.2cm', '0.2cm');
         $this->odtParagraphStyles[$indented->getStyleName()] = $indented;
         
-        $centerAligned = new ParagraphStyle('center');
+        $centerAligned = new ParagraphStyle('center_aligned');
         $centerAligned->setTextAlign(StyleConstants::CENTER);
         $this->odtParagraphStyles[$centerAligned->getStyleName()] = $centerAligned;
         
-        $leftAligned = new ParagraphStyle('left');
+        $leftAligned = new ParagraphStyle('left_aligned');
         $leftAligned->setTextAlign(StyleConstants::LEFT);
         $this->odtParagraphStyles[$leftAligned->getStyleName()] = $leftAligned;
         
-        $rightAligned = new ParagraphStyle('right');
+        $rightAligned = new ParagraphStyle('right_aligned');
         $rightAligned->setTextAlign(StyleConstants::RIGHT);
         $this->odtParagraphStyles[$rightAligned->getStyleName()] = $rightAligned;
 
@@ -2913,7 +2913,13 @@ class Parsedown
         if ($hasName)
         {
             if ($Element['name'] == 'p') {
-                $this->p = new Paragraph();
+                switch ($this->paragraphDepth)
+                {
+                    case 0: $pStyle = 'non_indented'; break;
+                    case 1: $pStyle = 'indented'; break;
+                    default: $pStyle = null;
+                }
+                $this->p = new Paragraph($this->getOdtParagraphStyle($pStyle));
             }
             elseif ($Element['name'] == 'strong')
             {
@@ -3038,8 +3044,6 @@ class Parsedown
             elseif ($Element['name'] == 'blockquote')
             {
                 $this->paragraphDepth += 1;
-                // $parentPStyle = $this->pStyle;
-                // $this->pStyle = 'indented';
             }
             elseif ($Element['name'] == 'table')
             {
@@ -3057,7 +3061,7 @@ class Parsedown
                         }
                     }
                 }
-                
+
                 $this->tableRows = [];
             }
             elseif ($Element['name'] == 'tr')
@@ -3090,15 +3094,14 @@ class Parsedown
                     $parentPStyleCell = $this->pStyleCell;
                     switch ($Element['alignment'])
                     {
-                        case 'left': $this->pStyleCell = 'left'; break;
-                        case 'right': $this->pStyleCell = 'right'; break;
-                        case 'center': $this->pStyleCell = 'center'; break;
+                        case 'left': $this->pStyleCell = 'left_aligned'; break;
+                        case 'right': $this->pStyleCell = 'right_aligned'; break;
+                        case 'center': $this->pStyleCell = 'center_aligned'; break;
                     }
                 }
 
                 if (is_array($this->row))
                 {
-                    //$this->cell = $this->row->addCell(isset($Element['width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['width']) : null);
                     $this->p = new Paragraph($this->getOdtParagraphStyle($this->pStyleCell));
                 }
             }
@@ -3304,7 +3307,7 @@ class Parsedown
                     {
                         $this->row[] = $this->p;
                     }
-                    
+
                     $this->p = null;
                 }
                 elseif ($Element['name'] == 'thead' || $Element['name'] == 'tbody')
