@@ -555,7 +555,7 @@ class Parsedown
         return $this;
     }
 
-    protected $breaksEnabled;
+    protected $breaksEnabled = true;
 
     function setMarkupEscaped($markupEscaped)
     {
@@ -3583,6 +3583,8 @@ class Parsedown
     protected $UnderlineRegex = '/^_((?:\\\\_|[^_])+?)_(?!_)\b/us';
 
     protected $VariableRegex = '/^\$\{((?:\\\\\$|[^$])+?)\}/us';
+
+    protected $BrRegex = '';
 
     protected $regexHtmlAttribute = '[a-zA-Z_:][\w:.-]*+(?:\s*+=\s*+(?:[^"\'=<>`\s]+|"[^"]*+"|\'[^\']*+\'))?+';
 

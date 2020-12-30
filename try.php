@@ -382,7 +382,6 @@ $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 
 
 $parsedown = new Parsedown($type);
-$parsedown->setBreaksEnabled(true);
 $parsedown->setVarConverter($varConverter);
 
 // $tree = $parsedown->getParseTree($text);
