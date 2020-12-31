@@ -1,0 +1,46 @@
+| header 1 | header 2 |
+| -------- | -------- |
+| cell 1.1 | cell 1.2 |
+| cell 2.1 | cell 2.2 |
+
+---
+
+|          |          |
+| -------- | -------- |
+| cell 1.1 | cell 1.2 |
+| cell 2.1 | cell 2.2 |
+
+---
+
+| header 1 | header 2 | header 2 |
+| :------- | :------: | -------: |
+| cell 1.1 | cell 1.2 | cell 1.3 |
+| cell 2.1 | cell 2.2 | cell 2.3 |
+
+---
+
+|          |          |
+| ---3---- | --6--- |
+| cell 1.1 | cell 1.2 |
+| cell 2.1 | cell 2.2 |
+
+---
+
+| header 1 | header 2 | header 2 |
+| :---3--- | :---4--: | ---5---: |
+| cell 1.1 | cell 1.2 | cell 1.3 |
+| cell 2.1 | cell 2.2 | cell 2.3 |
+
+---
+
+| header 1 | header 2          |
+| ------------- | ----------- |
+| cell 1.1   | cell 1.2 |
+|    cell 2.1 | cell 2.2     |
+
+---
+
+| | |
+| --------------------------------------- | --------------------------------------- |
+| cell 1.1 red prvi<br>cell 1.1 red drugi | cell 1.2 red prvi<br>cell 1.2 red drugi |
+| cell 2.1                                | cell 2.2                                |

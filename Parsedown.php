@@ -412,7 +412,7 @@ class Parsedown
         {
             $this->setPhpWordMargins();
         }
-        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        elseif ($this->outputMode == self::TYPE_ODT)
         {
             $this->setPhpOdtMargins();
         }
@@ -426,7 +426,7 @@ class Parsedown
         {
             $this->setPhpWordMargins();
         }
-        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        elseif ($this->outputMode == self::TYPE_ODT)
         {
             $this->setPhpOdtMargins();
         }
@@ -440,7 +440,7 @@ class Parsedown
         {
             $this->setPhpWordMargins();
         }
-        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        elseif ($this->outputMode == self::TYPE_ODT)
         {
             $this->setPhpOdtMargins();
         }
@@ -454,7 +454,7 @@ class Parsedown
         {
             $this->setPhpWordMargins();
         }
-        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        elseif ($this->outputMode == self::TYPE_ODT)
         {
             $this->setPhpOdtMargins();
         }
@@ -468,7 +468,7 @@ class Parsedown
         {
             $this->setPhpWordMargins();
         }
-        elseif ($this->outputMode == self::TYPE_ODT && $this->odt && $this->odtPageStyle)
+        elseif ($this->outputMode == self::TYPE_ODT)
         {
             $this->setPhpOdtMargins();
         }
@@ -2835,59 +2835,30 @@ class Parsedown
 
     protected function addText($text)
     {
-        if ($this->outputMode == self::TYPE_DOCX)
+        if ($text && $text != "\n")
         {
-            if ($this->textRun != null)
+            if ($this->elementIsBr($text))
             {
-                if ($text && ($text == ' ' || !ctype_space($text)))
+                if ($this->outputMode == self::TYPE_DOCX)
                 {
-                    /*
-                    var_dump('addText', $text);
-                    */
-                    if ($this->elementIsBr($text))
-                    {
-                        $this->textRun->addTextBreak();
-                    }
-                    else
-                    {
-                        $this->textRun->addText($text, $this->options);
-                    }
+                    $this->textRun->addTextBreak();
                 }
-                
+                else
+                {
+                    $this->p->addLineBreak();
+                }
             }
-            /*
             else
             {
-                throw new Exception('Undefined element to call addText on');
-            }
-            */
-        }
-        elseif ($this->outputMode == self::TYPE_ODT)
-        {
-            if ($this->p != null)
-            {
-                if ($text && ($text == ' ' || !ctype_space($text)))
+                if ($this->outputMode == self::TYPE_DOCX)
                 {
-                    /*
-                    var_dump('addText', $text);
-                    */
-                    if ($this->elementIsBr($text))
-                    {
-                        $this->p->addLineBreak();
-                    }
-                    else
-                    {
-                        $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
-                    }
+                    $this->textRun->addText($text, $this->options);
                 }
-                
+                else
+                {
+                    $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
+                }
             }
-            /*
-            else
-            {
-                throw new Exception('Undefined element to call addText on');
-            }
-            */
         }
     }
 
@@ -3053,13 +3024,20 @@ class Parsedown
                 $this->table->createColumns($Element['column_num']);
                 if ($Element['specified_widths'])
                 {
+                    $total = 0;
                     for ($i = 0; $i < $Element['column_num']; ++$i)
                     {
                         if ($Element['widths'][$i])
                         {
+                            $total += $Element['widths'][$i];
                             $this->table->getColumnStyle($i)->setWidth($Element['widths'][$i].'cm');
                         }
                     }
+
+                    $tableStyle = new TableStyle($this->table->getTableName());
+                    $tableStyle->setWidth($total.'cm');
+                    $tableStyle->setAlignment(StyleConstants::LEFT);
+                    $this->table->setStyle($tableStyle);
                 }
 
                 $this->tableRows = [];

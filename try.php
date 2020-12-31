@@ -374,6 +374,7 @@ $type = Parsedown::TYPE_ODT;
 // simple_variables_with_params.mdd
 // zop_items_inline.mdd
 // zop_items_list.mdd
+// tables.mdd
 // test.mdd
 $inputFileFull = 'test.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
