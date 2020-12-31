@@ -361,8 +361,8 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 */
 
 // $type = Parsedown::TYPE_HTML;
-$type = Parsedown::TYPE_ODT;
-// $type = Parsedown::TYPE_DOCX;
+// $type = Parsedown::TYPE_ODT;
+$type = Parsedown::TYPE_DOCX;
 
 //$phpWord = new \PhpOffice\PhpWord\PhpWord();
 //$odt = ODT::getInstance();
@@ -380,34 +380,9 @@ $inputFileFull = 'test.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
-
+$filename = "output/".time()."_$inputFile";
 
 $parsedown = new Parsedown($type);
 $parsedown->setVarConverter($varConverter);
-
-// $tree = $parsedown->getParseTree($text);
-// var_dump($parsedown->lineElements($tree[0]['handler']['argument']));
-
-/*
-$map = [];
-var_dump($parsedown->extractEmphasis('_***Hello***_', $map), $map);
-*/
-
-$output = $parsedown->text($text);
-echo $output;
-
-$filename = "output/".time()."_$inputFile.$type";
-
-if ($type == Parsedown::TYPE_ODT)
-{
-    ODT::getInstance()->output($filename);
-}
-elseif ($type == Parsedown::TYPE_DOCX)
-{
-    $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($parsedown->getPhpWord(), 'Word2007');
-    $objWriter->save($filename);
-}
-else
-{
-    file_put_contents($filename, $output);
-}
+// $parsedown->generateFile($text, $filename);
+$parsedown->generateDownload($text, $filename);

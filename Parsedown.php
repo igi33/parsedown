@@ -509,6 +509,74 @@ class Parsedown
     }
 
     #
+    # Output methods
+    #
+
+    public function generateFile($text, $filepath)
+    {
+        $output = $this->text($text);
+        $filepath .= '.'.$this->outputMode;
+
+        if ($this->outputMode == Parsedown::TYPE_ODT)
+        {
+            $this->odt->output($filepath);
+        }
+        elseif ($this->outputMode == Parsedown::TYPE_DOCX)
+        {
+            $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($this->phpWord, 'Word2007');
+            $objWriter->save($filepath);
+        }
+        else
+        {
+            file_put_contents($filepath, $output);
+        }
+    }
+
+    public function generateDownload($text, $filepath)
+    {
+        $output = $this->text($text);
+
+        $filepath .= '.'.$this->outputMode;
+        $filepathItems = explode('/', $filepath);
+        $filename = end($filepathItems);
+
+        if ($this->outputMode == Parsedown::TYPE_ODT)
+        {
+            $this->odt->output($filepath);
+            ob_end_clean();
+            header('Content-Type: application/vnd.oasis.opendocument.text');
+            header('Content-type: application/force-download');
+            header('Content-Disposition: attachment;filename="'.$filename.'"');
+            header('Cache-Control: max-age=0'); // no cache
+            $content = file_get_contents($filepath);
+            echo $content;
+            unlink($filepath);
+        }
+        elseif ($this->outputMode == Parsedown::TYPE_DOCX)
+        {
+            header('Content-Type: application/vnd.ms-word');
+            // header('Content-type: application/force-download');
+            header('Content-Disposition: attachment;filename="'.$filename.'"');
+            header('Cache-Control: max-age=0'); // no cache
+            header("Content-Transfer-Encoding: binary");
+            $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($this->phpWord, 'Word2007');
+            $objWriter->save('php://output');
+        }
+        else
+        {
+            file_put_contents($filepath, $output);
+            ob_end_clean();
+            header('Content-Type: text/html');
+            header('Content-type: application/force-download');
+            header('Content-Disposition: attachment;filename="'.$filename.'"');
+            header('Cache-Control: max-age=0'); // no cache
+            $content = file_get_contents($filepath);
+            echo $content;
+            unlink($filepath);
+        }
+    }
+
+    #
     # Convenient public parse tree method
     #
 
