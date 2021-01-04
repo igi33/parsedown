@@ -1836,6 +1836,11 @@ class Parsedown
         }
         elseif ($this->outputMode == self::TYPE_DOCX)
         {
+            if ($this->section == null)
+            {
+                $this->section = $this->phpWord->addSection();
+                $this->setPhpWordMargins();
+            }
             $this->elementsDocx($lineElements);
         }
         elseif ($this->outputMode == self::TYPE_HTML)
