@@ -1081,6 +1081,7 @@ class Parsedown
         {
             $Block = array(
                 'element' => array(
+                    'comment' => true,
                     'rawHtml' => $Line['body'],
                     'autobreak' => true,
                 ),
@@ -2895,7 +2896,10 @@ class Parsedown
                 }
                 else
                 {
-                    $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
+                    if (!isset($Element['comment']))
+                    {
+                        $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
+                    }
                 }
             }
 
@@ -3323,7 +3327,10 @@ class Parsedown
                 }
                 else
                 {
-                    $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
+                    if (!isset($Element['comment']))
+                    {
+                        $this->addText(!$permitRawHtml ? self::escape($text, true) : $text);
+                    }
                 }
             }
 
@@ -3440,8 +3447,6 @@ class Parsedown
 
             $this->markup .= ($autoBreak ? "\n" : '');
             $this->element($Element);
-            
-            var_dump('ELEMENTS', $Element);
 
             $autoBreak = $autoBreakNext;
         }
