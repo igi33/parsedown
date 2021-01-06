@@ -47,6 +47,7 @@ class Parsedown
     protected $row;
     protected $isTh; // true if in thead, false if in tbody
     protected $pStyleCell; // holds the current pStyle name for table cell text
+    protected $pStyle; // holds the current pStyle name for paragraph text
 
     // properties used for keeping phpword internal state
     protected $phpWord;
@@ -96,6 +97,8 @@ class Parsedown
         $this->table = null;
         $this->row = null;
         $this->isTh = null;
+        $this->pStyle = null;
+        $this->pStyleCell = null;
     }
 
     protected function initializeOdtParameters()
@@ -181,7 +184,6 @@ class Parsedown
         $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
         $this->odtBaseTextStyleNames[] = $boldItalicUnderlineTextStyle->getStyleName();
 
-
         $heading1 = new ParagraphStyle('h1');
         $heading1->setTextAlign(StyleConstants::CENTER);
         $heading1->setVerticalMargin('0.2cm', '0.2cm');
@@ -202,6 +204,12 @@ class Parsedown
         $heading4->setVerticalMargin('0cm', '0.2cm');
         $this->odtParagraphStyles[$heading4->getStyleName()] = $heading4;
 
+
+        $header = new ParagraphStyle('header');
+        $header->setTextAlign(StyleConstants::LEFT);
+        $header->setHorizontalMargins('0.0cm', '8.82cm');
+        $this->odtParagraphStyles[$header->getStyleName()] = $header;
+
         $nonIndented = new ParagraphStyle('non_indented');
         $nonIndented->setTextAlign(StyleConstants::JUSTIFY);
         $nonIndented->setVerticalMargin('0.2cm', '0.2cm');
@@ -213,6 +221,7 @@ class Parsedown
         $indented->setVerticalMargin('0.2cm', '0.2cm');
         $this->odtParagraphStyles[$indented->getStyleName()] = $indented;
         
+
         $centerAligned = new ParagraphStyle('center_aligned');
         $centerAligned->setTextAlign(StyleConstants::CENTER);
         $this->odtParagraphStyles[$centerAligned->getStyleName()] = $centerAligned;
@@ -224,10 +233,16 @@ class Parsedown
         $rightAligned = new ParagraphStyle('right_aligned');
         $rightAligned->setTextAlign(StyleConstants::RIGHT);
         $this->odtParagraphStyles[$rightAligned->getStyleName()] = $rightAligned;
+        
+        $justify = new ParagraphStyle('justify');
+        $justify->setTextAlign(StyleConstants::JUSTIFY);
+        $this->odtParagraphStyles[$justify->getStyleName()] = $justify;
+
 
         $newPage = new ParagraphStyle('new_page');
         $newPage->setBreakAfter(StyleConstants::PAGE);
         $this->odtParagraphStyles[$newPage->getStyleName()] = $newPage;
+
 
         $romanList = new ListStyle('roman');
         $romanList->setNumberLevel(1, new NumberFormat('', '', 'I'), $boldTextStyle);
@@ -247,6 +262,7 @@ class Parsedown
         $bulletList->setBulletLevel(3, StyleConstants::BULLET);
         $this->odtListStyles[$bulletList->getStyleName()] = $bulletList;
 
+
         $pageStyle = new PageStyle('page');
         $this->odtPageStyle = $pageStyle;
         $this->setPhpOdtMargins();
@@ -255,7 +271,6 @@ class Parsedown
     protected function initializePhpWordParameters()
     {
         $this->fontName = 'Times New Roman';
-        $this->pStyleCell = null;
         $this->textRun = null;
         $this->listStyleName = null;
         $this->cell = null;
@@ -271,7 +286,8 @@ class Parsedown
         $this->phpWord->addParagraphStyle('left_aligned', array('align' => 'left', 'spaceAfter' => 0, 'spaceBefore' => 0));
         $this->phpWord->addParagraphStyle('right_aligned', array('align' => 'right', 'spaceAfter' => 0, 'spaceBefore' => 0));
         $this->phpWord->addParagraphStyle('center_aligned', array('align' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0));
-        $this->phpWord->addParagraphStyle('header', array('spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'left', 'indentation' => array('right' => 4000)));
+        $this->phpWord->addParagraphStyle('justify', array('align' => 'both', 'spaceAfter' => 0, 'spaceBefore' => 0));
+        $this->phpWord->addParagraphStyle('header', array('spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'left', 'indentation' => array('right' => 5000)));
         $this->phpWord->addTitleStyle(1, array('bold' => true), array('spaceAfter' => 200, 'spaceBefore' => 200, 'align' => 'center'));
         $this->phpWord->addTitleStyle(11, array('bold' => true), array('spaceAfter' => 0, 'spaceBefore' => 200, 'align' => 'center'));
         $this->phpWord->addTitleStyle(12, array('bold' => true), array('spaceAfter' => 0, 'spaceBefore' => 0, 'align' => 'center'));
@@ -810,17 +826,17 @@ class Parsedown
         '<' => array('Comment', 'Markup'),
         '=' => array('SetextHeader'),
         '>' => array('Quote'),
-        '[' => array('Reference'),
+        '[' => array('ParagraphStyle'),
         '_' => array('Rule'),
-        '`' => array('FencedCode'),
+        // '`' => array('FencedCode'),
         '|' => array('Table'),
-        '~' => array('FencedCode'),
+        // '~' => array('FencedCode'),
     );
 
     # ~
 
     protected $unmarkedBlockTypes = array(
-        'Code',
+        // 'Code', // uncomment to handle whitespace defined code blocks
     );
 
     #
@@ -1363,10 +1379,13 @@ class Parsedown
             return null;
         }
 
+        // Disabled because references aren't needed
+        /*
         if ($Line['text'][0] === '[' and $this->blockReference($Line))
         {
             return $Block;
         }
+        */
 
         if ($Line['indent'] >= $requiredIndent)
         {
@@ -1532,6 +1551,43 @@ class Parsedown
         }
 
         $Block['element']['rawHtml'] .= "\n" . $Line['body'];
+
+        return $Block;
+    }
+
+    #
+    # Paragraph style by name
+    #
+
+    protected function blockParagraphStyle($Line)
+    {
+        if (strpos($Line['text'], ']') !== false
+            && preg_match('/^\[((?:[a-zA-Z0-9\-_]+)+?)\][ ]?+(.*+)/', $Line['text'], $matches))
+        {
+            $Block = array(
+                'element' => array(
+                    'name' => 'blockquote',
+                    'attributes' => array('class' => $matches[1]),
+                    'handler' => array(
+                        'function' => 'linesElements',
+                        'argument' => (array) $matches[2],
+                        'destination' => 'elements',
+                    )
+                ),
+            );
+
+            return $Block;
+        }
+    }
+
+    protected function blockParagraphStyleContinue($Line, array $Block)
+    {
+        if (isset($Block['interrupted']))
+        {
+            return;
+        }
+
+        $Block['element']['handler']['argument'][] = $Line['text'];
 
         return $Block;
     }
@@ -2639,12 +2695,20 @@ class Parsedown
         {
             if ($Element['name'] == 'p')
             {
-                switch ($this->paragraphDepth)
+                if ($this->pStyle)
                 {
-                    case 0: $pStyle = 'non_indented'; break;
-                    case 1: $pStyle = 'indented'; break;
-                    default: $pStyle = null;
+                    $pStyle = $this->pStyle;
                 }
+                else
+                {
+                    switch ($this->paragraphDepth)
+                    {
+                        case 0: $pStyle = 'non_indented'; break;
+                        case 1: $pStyle = 'indented'; break;
+                        default: $pStyle = null;
+                    }
+                }
+                
                 $this->textRun = $this->section->addTextRun($pStyle);
             }
             elseif ($Element['name'] == 'strong')
@@ -2733,7 +2797,14 @@ class Parsedown
             }
             elseif ($Element['name'] == 'blockquote')
             {
-                $this->paragraphDepth += 1;
+                if (isset($Element['attributes']['class']))
+                {
+                    $this->pStyle = $Element['attributes']['class'];
+                }
+                else
+                {
+                    $this->paragraphDepth += 1;
+                }
             }
             elseif ($Element['name'] == 'table')
             {
@@ -2907,6 +2978,10 @@ class Parsedown
             {
                 if ($Element['name'] == 'p')
                 {
+                    if ($this->pStyle)
+                    {
+                        $this->pStyle = null;
+                    }
                     $this->textRun = null;
                 }
                 elseif ($Element['name'] == 'strong')
@@ -2929,7 +3004,14 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'blockquote')
                 {
-                    $this->paragraphDepth -= 1;
+                    if (isset($Element['attributes']['class']))
+                    {
+                        $this->pStyle = null;
+                    }
+                    else
+                    {
+                        $this->paragraphDepth -= 1;
+                    }
                 }
                 elseif ($Element['name'] == 'table')
                 {
@@ -3018,12 +3100,20 @@ class Parsedown
         if ($hasName)
         {
             if ($Element['name'] == 'p') {
-                switch ($this->paragraphDepth)
+                if ($this->pStyle)
                 {
-                    case 0: $pStyle = 'non_indented'; break;
-                    case 1: $pStyle = 'indented'; break;
-                    default: $pStyle = null;
+                    $pStyle = $this->pStyle;
                 }
+                else
+                {
+                    switch ($this->paragraphDepth)
+                    {
+                        case 0: $pStyle = 'non_indented'; break;
+                        case 1: $pStyle = 'indented'; break;
+                        default: $pStyle = null;
+                    }
+                }
+                
                 $this->p = new Paragraph($this->getOdtParagraphStyle($pStyle));
             }
             elseif ($Element['name'] == 'strong')
@@ -3122,7 +3212,14 @@ class Parsedown
             }
             elseif ($Element['name'] == 'blockquote')
             {
-                $this->paragraphDepth += 1;
+                if (isset($Element['attributes']['class']))
+                {
+                    $this->pStyle = $Element['attributes']['class'];
+                }
+                else
+                {
+                    $this->paragraphDepth += 1;
+                }                
             }
             elseif ($Element['name'] == 'table')
             {
@@ -3338,6 +3435,10 @@ class Parsedown
             {
                 if ($Element['name'] == 'p')
                 {
+                    if ($this->pStyle)
+                    {
+                        $this->pStyle = null;
+                    }
                     $this->p = null;
                 }
                 elseif ($Element['name'] == 'strong')
@@ -3381,7 +3482,14 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'blockquote')
                 {
-                    $this->paragraphDepth -= 1;
+                    if (isset($Element['attributes']['class']))
+                    {
+                        $this->pStyle = null;
+                    }
+                    else
+                    {
+                        $this->paragraphDepth -= 1;
+                    }
                 }
                 elseif ($Element['name'] == 'table')
                 {
