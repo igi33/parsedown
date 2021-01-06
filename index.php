@@ -361,11 +361,11 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 */
 
 // $type = Parsedown::TYPE_HTML;
-$type = Parsedown::TYPE_ODT;
-// $type = Parsedown::TYPE_DOCX;
+// $type = Parsedown::TYPE_ODT;
+$type = Parsedown::TYPE_DOCX;
 
-//$phpWord = new \PhpOffice\PhpWord\PhpWord();
-//$odt = ODT::getInstance();
+// $phpWord = new \PhpOffice\PhpWord\PhpWord();
+// $odt = ODT::getInstance();
 
 // multiple_paragraphs_with_styling.mdd
 // headings_and_images.mdd
@@ -375,8 +375,9 @@ $type = Parsedown::TYPE_ODT;
 // zop_items_inline.mdd
 // zop_items_list.mdd
 // tables.mdd
+// color.mdd
 // test.mdd
-$inputFileFull = 'test.mdd';
+$inputFileFull = 'color.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';

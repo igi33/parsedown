@@ -1,0 +1,15 @@
+`[FF0000]Red text,` normal text, `[00FF00]green-``[0000FF]blue` text
+
+`No square brackets`
+
+`[]Empty square brackets`
+
+`[[]]Nested square brackets`
+
+`[`asd]Backtick in square brackets`
+
+`[asd*]Asterisk in **square** brackets with emphasis`
+
+***`[ff00ff]Color` inside emphasis***
+
+`[ff00ff]***Emphasis*** inside color`

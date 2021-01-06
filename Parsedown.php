@@ -111,50 +111,65 @@ class Parsedown
         $this->list = null;
         $this->tableRows = null;
         $this->pageBreakBefore = false;
+        $this->odtBaseTextStyleNames = array();
 
         $defaultTextStyle = new TextStyle('default');
         $defaultTextStyle->setFontName($this->fontName);
         $defaultTextStyle->setFontSize($this->fontSize);
+        $defaultTextStyle->setColor();
         $this->odtTextStyles[$defaultTextStyle->getStyleName()] = $defaultTextStyle;
+        $this->odtBaseTextStyleNames[] = $defaultTextStyle->getStyleName();
         
         $boldTextStyle = new TextStyle('bold');
         $boldTextStyle->setBold();
         $boldTextStyle->setFontName($this->fontName);
         $boldTextStyle->setFontSize($this->fontSize);
+        $boldTextStyle->setColor();
         $this->odtTextStyles[$boldTextStyle->getStyleName()] = $boldTextStyle;
+        $this->odtBaseTextStyleNames[] = $boldTextStyle->getStyleName();
         
         $italicTextStyle = new TextStyle('italic');
         $italicTextStyle->setItalic();
         $italicTextStyle->setFontName($this->fontName);
         $italicTextStyle->setFontSize($this->fontSize);
+        $italicTextStyle->setColor();
         $this->odtTextStyles[$italicTextStyle->getStyleName()] = $italicTextStyle;
+        $this->odtBaseTextStyleNames[] = $italicTextStyle->getStyleName();
 
         $underlineTextStyle = new TextStyle('underline');
         $underlineTextStyle->setTextUnderline();
         $underlineTextStyle->setFontName($this->fontName);
         $underlineTextStyle->setFontSize($this->fontSize);
+        $underlineTextStyle->setColor();
         $this->odtTextStyles[$underlineTextStyle->getStyleName()] = $underlineTextStyle;
+        $this->odtBaseTextStyleNames[] = $underlineTextStyle->getStyleName();
         
         $boldItalicTextStyle = new TextStyle('bold_italic');
         $boldItalicTextStyle->setBold();
         $boldItalicTextStyle->setItalic();
         $boldItalicTextStyle->setFontName($this->fontName);
         $boldItalicTextStyle->setFontSize($this->fontSize);
+        $boldItalicTextStyle->setColor();
         $this->odtTextStyles[$boldItalicTextStyle->getStyleName()] = $boldItalicTextStyle;
+        $this->odtBaseTextStyleNames[] = $boldItalicTextStyle->getStyleName();
 
         $boldUnderlineTextStyle = new TextStyle('bold_underline');
         $boldUnderlineTextStyle->setBold();
         $boldUnderlineTextStyle->setTextUnderline();
         $boldUnderlineTextStyle->setFontName($this->fontName);
         $boldUnderlineTextStyle->setFontSize($this->fontSize);
+        $boldUnderlineTextStyle->setColor();
         $this->odtTextStyles[$boldUnderlineTextStyle->getStyleName()] = $boldUnderlineTextStyle;
+        $this->odtBaseTextStyleNames[] = $boldUnderlineTextStyle->getStyleName();
 
         $italicUnderlineTextStyle = new TextStyle('italic_underline');
         $italicUnderlineTextStyle->setItalic();
         $italicUnderlineTextStyle->setTextUnderline();
         $italicUnderlineTextStyle->setFontName($this->fontName);
         $italicUnderlineTextStyle->setFontSize($this->fontSize);
+        $italicUnderlineTextStyle->setColor();
         $this->odtTextStyles[$italicUnderlineTextStyle->getStyleName()] = $italicUnderlineTextStyle;
+        $this->odtBaseTextStyleNames[] = $italicUnderlineTextStyle->getStyleName();
         
         $boldItalicUnderlineTextStyle = new TextStyle('bold_italic_underline');
         $boldItalicUnderlineTextStyle->setBold();
@@ -162,7 +177,10 @@ class Parsedown
         $boldItalicUnderlineTextStyle->setTextUnderline();
         $boldItalicUnderlineTextStyle->setFontName($this->fontName);
         $boldItalicUnderlineTextStyle->setFontSize($this->fontSize);
+        $boldItalicUnderlineTextStyle->setColor();
         $this->odtTextStyles[$boldItalicUnderlineTextStyle->getStyleName()] = $boldItalicUnderlineTextStyle;
+        $this->odtBaseTextStyleNames[] = $boldItalicUnderlineTextStyle->getStyleName();
+
 
         $heading1 = new ParagraphStyle('h1');
         $heading1->setTextAlign(StyleConstants::CENTER);
@@ -1807,7 +1825,8 @@ class Parsedown
         '<' => array('UrlTag', 'EmailTag', 'Markup'),
         '[' => array('Link'),
         '_' => array('Emphasis'),
-        '`' => array('Code'),
+        // '`' => array('Code'),
+        '`' => array('Color'),
         '~' => array('Strikethrough'),
         '\\' => array('EscapeSequence'),
         '$' => array('Var'),
@@ -1970,6 +1989,34 @@ class Parsedown
         );
 
         return $Inline;
+    }
+
+    protected function inlineColor($Excerpt)
+    {
+        $marker = $Excerpt['text'][0];
+
+        if ( ! isset($Excerpt['text'][1]) or $Excerpt['text'][1] !== '[')
+        {
+            return;
+        }
+
+        if (!preg_match($this->ColorRegex, $Excerpt['text'], $matches))
+        {
+            return;
+        }
+
+        return array(
+            'extent' => strlen($matches[0]),
+            'element' => array(
+                'name' => 'color',
+                'color' => $matches[1],
+                'handler' => array(
+                    'function' => 'lineElements',
+                    'argument' => $matches[2],
+                    'destination' => 'elements',
+                )
+            ),
+        );
     }
 
     protected function inlineCode($Excerpt)
@@ -2751,6 +2798,10 @@ class Parsedown
             {
                 $this->isTh = false;
             }
+            elseif ($Element['name'] == 'color')
+            {
+                $this->options['color'] = $Element['color'];
+            }
         }
 
         $permitRawHtml = false;
@@ -2898,6 +2949,10 @@ class Parsedown
                 {
                     $this->isTh = null;
                 }
+                elseif ($Element['name'] == 'color')
+                {
+                    $this->options['color'] = null;
+                }
             }
         }
         elseif ($hasName)
@@ -2977,7 +3032,7 @@ class Parsedown
             }
             elseif ($Element['name'] == 'u')
             {
-                $this->options['underline'] = true;
+                $this->options['underline'] = 'single';
             }
             elseif ($Element['name'] == 'img')
             {
@@ -3140,6 +3195,41 @@ class Parsedown
             {
                 $this->isTh = false;
             }
+            elseif ($Element['name'] == 'color')
+            {
+                $color = $Element['color'];
+                $this->options['color'] = $color;
+                
+                if (!isset($this->odtTextStyles[$this->odtBaseTextStyleNames[0].'_'.$color]))
+                {
+                    foreach ($this->odtBaseTextStyleNames as $name)
+                    {
+                        $styleName = $name.'_'.$color;
+                        $textStyle = new TextStyle($styleName);
+                        $textStyle->setFontName($this->fontName);
+                        $textStyle->setFontSize($this->fontSize);
+
+                        if (strpos($name, 'bold') !== false)
+                        {
+                            $textStyle->setBold();
+                        }
+                        if (strpos($name, 'italic') !== false)
+                        {
+                            $textStyle->setItalic();
+                        }
+                        if (strpos($name, 'underline') !== false)
+                        {
+                            $textStyle->setTextUnderline();
+                        }
+
+                        $colorOdt = (ctype_xdigit($color) ? '#' : '').$color;
+                        $textStyle->setColor($colorOdt);
+                        
+                        $this->odtTextStyles[$styleName] = $textStyle;
+                    }
+                }
+                
+            }
         }
 
         $permitRawHtml = false;
@@ -3268,6 +3358,7 @@ class Parsedown
                 }
                 elseif ($Element['name'] == 'li')
                 {
+                    // create unique key for item: <list depth>_<item_position>
                     $key = $this->listDepth.'_'.($this->list->getNumberOfElements()-1);
 
                     // skip list item if already added before
@@ -3318,6 +3409,10 @@ class Parsedown
                 {
                     $this->isTh = null;
                 }
+                elseif ($Element['name'] == 'color')
+                {
+                    $this->options['color'] = null;
+                }
             }
         }
         elseif ($hasName)
@@ -3345,6 +3440,8 @@ class Parsedown
 
             $this->markup .= ($autoBreak ? "\n" : '');
             $this->element($Element);
+            
+            var_dump('ELEMENTS', $Element);
 
             $autoBreak = $autoBreakNext;
         }
@@ -3458,44 +3555,47 @@ class Parsedown
     {
         $isBold = isset($options['bold']) && $options['bold'];
         $isItalic = isset($options['italic']) && $options['italic'];
-        $isUnderline = isset($options['underline']) && $options['underline'] == 'single';
+        $isUnderline = isset($options['underline']) && $options['underline'] === 'single';
+        $isColored = isset($options['color']);
 
-        if ($isBold && $isItalic && $isUnderline)
+        $style = 'default';
+
+        if ($isBold && $isItalic && $isUnderline && isset($this->odtTextStyles['bold_italic_underline']))
         {
-            return isset($this->odtTextStyles['bold_italic_underline']) ? $this->odtTextStyles['bold_italic_underline'] : null;
+            $style = 'bold_italic_underline';
+        }
+        elseif ($isBold && $isItalic && isset($this->odtTextStyles['bold_italic']))
+        {
+            $style = 'bold_italic';
+        }
+        elseif ($isBold && $isUnderline && isset($this->odtTextStyles['bold_underline']))
+        {
+            $style = 'bold_underline';
+        }
+        elseif ($isItalic && $isUnderline && isset($this->odtTextStyles['italic_underline']))
+        {
+            $style = 'italic_underline';
+        }
+        elseif ($isBold && isset($this->odtTextStyles['bold']))
+        {
+            $style = 'bold';
+        }
+        elseif ($isItalic && isset($this->odtTextStyles['italic']))
+        {
+            $style = 'italic';
+        }
+        elseif ($isUnderline && isset($this->odtTextStyles['underline']))
+        {
+            $style = 'underline';
         }
 
-        if ($isBold && $isItalic)
+        if ($isColored)
         {
-            return isset($this->odtTextStyles['bold_italic']) ? $this->odtTextStyles['bold_italic'] : null;
+            // append color to style name
+            $style .= '_'.$options['color'];
         }
 
-        if ($isBold && $isUnderline)
-        {
-            return isset($this->odtTextStyles['bold_underline']) ? $this->odtTextStyles['bold_underline'] : null;
-        }
-
-        if ($isItalic && $isUnderline)
-        {
-            return isset($this->odtTextStyles['italic_underline']) ? $this->odtTextStyles['italic_underline'] : null;
-        }
-
-        if ($isBold)
-        {
-            return isset($this->odtTextStyles['bold']) ? $this->odtTextStyles['bold'] : null;
-        }
-
-        if ($isItalic)
-        {
-            return isset($this->odtTextStyles['italic']) ? $this->odtTextStyles['italic'] : null;
-        }
-
-        if ($isUnderline)
-        {
-            return isset($this->odtTextStyles['underline']) ? $this->odtTextStyles['underline'] : null;
-        }
-
-        return isset($this->odtTextStyles['default']) ? $this->odtTextStyles['default'] : null;
+        return isset($this->odtTextStyles[$style]) ? $this->odtTextStyles[$style] : null;
     }
 
     #
@@ -3709,6 +3809,8 @@ class Parsedown
     protected $UnderlineRegex = '/^_((?:\\\\_|[^_])+?)_(?!_)\b/us';
 
     protected $VariableRegex = '/^\$\{((?:\\\\\$|[^$])+?)\}/us';
+
+    protected $ColorRegex = '/^`\[((?:[\dA-Fa-f]{6})+?)\]((?:\\\\`|[^`])+?)`/us';
 
     protected $BrRegex = "/^<br\W*?\/?>$/";
 
