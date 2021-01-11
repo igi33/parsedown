@@ -592,23 +592,21 @@ class Parsedown
         }
     }
 
-    public function generateDownload($filepath)
+    public function generateDownload($filename)
     {
-        $filepath .= '.'.$this->outputMode;
-        $filepathItems = explode('/', $filepath);
-        $filename = end($filepathItems);
+        $filename = str_replace('/', '_', $filename).'.'.$this->outputMode;
 
         if ($this->outputMode == Parsedown::TYPE_ODT)
         {
-            $this->odt->output($filepath);
+            $this->odt->output($filename);
             ob_end_clean();
             header('Content-Type: application/vnd.oasis.opendocument.text');
             header('Content-type: application/force-download');
             header('Content-Disposition: attachment;filename="'.$filename.'"');
             header('Cache-Control: max-age=0'); // no cache
-            $content = file_get_contents($filepath);
+            $content = file_get_contents($filename);
             echo $content;
-            unlink($filepath);
+            unlink($filename);
         }
         elseif ($this->outputMode == Parsedown::TYPE_DOCX)
         {

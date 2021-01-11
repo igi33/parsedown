@@ -40,12 +40,12 @@ class VariableConverter {
         $this->keys[$key] = ['collection' => true, 'fn_source' => $fnSource, 'properties' => [], 'fn_handle' => $fnHandle, 'fns_params' => $fnsParams];
     }
 
-    public function unregisterVariable() {
+    public function unregisterVariable($key) {
         unset($this->keys[$key]);
         unset($this->values[$key]);
     }
 
-    public function evaluate($key, $params) {
+    public function evaluate($key, $params = null) {
         $keyPathItems = explode('.', $key);
         $name = array_shift($keyPathItems);
 
@@ -96,9 +96,11 @@ class VariableConverter {
         }
 
         // optionally execute variable parameter functions
-        foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
-            if (isset($params[$i])) {
-                $value = $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
+        if ($params) {
+            foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
+                if (isset($params[$i])) {
+                    $value = $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
+                }
             }
         }
 
