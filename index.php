@@ -31,13 +31,15 @@ $getIzvrsitelj = function() use ($pdo) {
     return $izv['ime'].' '.$izv['prezime'];
 };
 
-$textcaseParamFn = function(&$text, $case) {
+$textcaseParamFn = function($text, $case) {
     $caseLc = strtolower($case);
     if ($caseLc == 'upper') {
-        $text = mb_strtoupper($text, 'UTF-8');
-    } elseif ($caseLc == 'lower') {
-        $text = mb_strtolower($text, 'UTF-8');
+        return mb_strtoupper($text, 'UTF-8');
     }
+    if ($caseLc == 'lower') {
+        return mb_strtolower($text, 'UTF-8');
+    }
+    return $text;
 };
 
 $getKancelarija = function() use ($pdo) {
@@ -97,19 +99,21 @@ $getIspravu = function() {
     return 'веродостојну';
 };
 
-$datumParamFn = function (&$datum, $format) {
+$datumParamFn = function ($datum, $format) {
     if ($format) {
-        $datum = date($format, strtotime($datum));
+        return date($format, strtotime($datum));
     }
+    return $datum;
 };
 
-$cenaParamFn = function (&$iznos, $tip) {
+$cenaParamFn = function ($iznos, $tip) {
     if ($tip == 'iznos') {
-        $iznos = number_format($iznos, 2, ',', '.');
+        return number_format($iznos, 2, ',', '.');
     }
+    return $iznos;
 };
 
-$strankaFormatParamFn = function (&$poverioci, array $propsToShowWithEm) {
+$strankaFormatParamFn = function ($poverioci, array $propsToShowWithEm) {
     if (!empty($propsToShowWithEm)) {
         $propsToShow = [];
         $propsEms = [];
@@ -130,6 +134,7 @@ $strankaFormatParamFn = function (&$poverioci, array $propsToShowWithEm) {
             }
         }
     }
+    return $poverioci;
 };
 
 $handleStranke = function(array $poverioci) {
@@ -327,10 +332,15 @@ $handleStavkeList = function(array $stavke) {
     return ['text' => $text, 'markdown' => true];
 };
 
+$getPodrucje = function () {
+    return 'Именована за подручје Вишег суда у Сомбору и Привредног суда у Сомбору';
+};
+
 // ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
 
 $varConverter = new VariableConverter();
 $varConverter->registerVariable('izvrsitelj', $getIzvrsitelj, [$textcaseParamFn]);
+$varConverter->registerVariable('podrucjeImenovanja', $getPodrucje);
 $varConverter->registerVariable('oznaka', $getOznaka);
 $varConverter->registerVariable('kancelarija', $getKancelarija, [], ['naziv', 'adresa', 'mesto', 'tel1', 'tel2', 'tel3', 'pib', 'maticni_broj']);
 $varConverter->registerVariable('predmet', $getPredmet, [$datumParamFn], ['identifikacioni_broj', 'datum_prijema', 'broj_izvrsne_verodostojne_isprave']);
@@ -360,10 +370,6 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 
 */
 
-// $type = Parsedown::TYPE_HTML;
-// $type = Parsedown::TYPE_ODT;
-$type = Parsedown::TYPE_DOCX;
-
 // $phpWord = new \PhpOffice\PhpWord\PhpWord();
 // $odt = ODT::getInstance();
 
@@ -377,11 +383,15 @@ $type = Parsedown::TYPE_DOCX;
 // tables.mdd
 // color.mdd
 // test.mdd
-$inputFileFull = 'color.mdd';
+$inputFileFull = 'zop_items_list.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
 $filename = "output/".time()."_$inputFile";
+
+// $type = Parsedown::TYPE_HTML;
+// $type = Parsedown::TYPE_ODT;
+$type = Parsedown::TYPE_DOCX;
 
 $parsedown = new Parsedown($type);
 $parsedown->setVarConverter($varConverter);

@@ -22,11 +22,21 @@ class VariableConverter {
         return $this->values;
     }
 
-    public function registerVariable($key, $fnSource, array $fnsParams = [], array $properties = []) {
+    public function registerVariable($key, $fnSource, $fnsParams = null, array $properties = []) {
+        if ($fnsParams == null) {
+            $fnsParams = [];
+        } elseif (!is_array($fnsParams)) {
+            $fnsParams = [$fnsParams];
+        }
         $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => $fnsParams];
     }
 
-    public function registerCollectionVariable($key, $fnSource, $fnHandle, array $fnsParams = []) {
+    public function registerCollectionVariable($key, $fnSource, $fnHandle, $fnsParams = null) {
+        if ($fnsParams == null) {
+            $fnsParams = [];
+        } elseif (!is_array($fnsParams)) {
+            $fnsParams = [$fnsParams];
+        }
         $this->keys[$key] = ['collection' => true, 'fn_source' => $fnSource, 'properties' => [], 'fn_handle' => $fnHandle, 'fns_params' => $fnsParams];
     }
 
@@ -51,25 +61,13 @@ class VariableConverter {
         // get value
         $value = $this->values[$name];
 
-        // if variable is a collection, call handle function and return value
-        if ($this->keys[$name]['collection']) {
-            // optionally execute variable parameter functions
-            foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
-                if (isset($params[$i])) {
-                    $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
-                }
-            }
-            return $this->keys[$name]['fn_handle']($value);
-        }
-        // from here on out, variable is not a collection
-
         // Handles variable properties like 'kancelarija.naziv' separated by dots.
         // This is useful for cases when a variable value is an associated array or an object.
         // The code checks if the property is an array key, a public object property
         // or if a respective getter object method exists, in that order.
-        if (count($keyPathItems)) {
+        if (!$this->keys[$name]['collection'] && count($keyPathItems)) {
             $keyPropertiesPath = implode('.', $keyPathItems);
-            if (!in_array($keyPropertiesPath, $this->keys[$name]['properties'])) {
+            if ($this->keys[$name]['properties'] && !in_array($keyPropertiesPath, $this->keys[$name]['properties'])) {
                 throw new Exception("Property '$keyPropertiesPath' not in list of allowed properties for key '$name'");
             }
 
@@ -100,10 +98,11 @@ class VariableConverter {
         // optionally execute variable parameter functions
         foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
             if (isset($params[$i])) {
-                $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
+                $value = $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
             }
         }
 
-        return $value;
+        // return value for non-collections or handled value for collections
+        return $this->keys[$name]['collection'] ? $this->keys[$name]['fn_handle']($value) : $value;
     }
 }
