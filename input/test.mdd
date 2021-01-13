@@ -1,10 +1,17 @@
 ![2.7,1.38](grb.jpg)
 **РЕПУБЛИКА СРБИЈА**
 **ЈАВНИ ИЗВРШИТЕЉ ${izvrsitelj|upper}**
+[header]**${podrucjeImenovanja}**
 **${kancelarija.mesto}, ${kancelarija.adresa}**
 **Пословни број. ${oznaka}**
 **Идент. број предмета: ${predmet.identifikacioni_broj}**
 **Дана ${datumZop|d.m.Y.} године**
+
+---
+
+[right_aligned]**Седиште фирме**
+**Адреса фирме**
+**Град фирме**
 
 ---
 

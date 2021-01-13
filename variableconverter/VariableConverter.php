@@ -14,6 +14,22 @@ class VariableConverter {
         $this->values = [];
     }
 
+    public function __set($name, $value) {
+        $this->$name = $value;
+    }
+    
+    public function __get($name) {
+        if (!isset($this->$name)) {
+            throw new Exception("Property '$name' doesn't exist!");
+        }
+        
+        return $this->$name;
+    }
+    
+    public function __isset($name) {
+        return isset($this->$name);
+    }
+
     public function getKeys() {
         return array_keys($this->keys);
     }
@@ -22,22 +38,48 @@ class VariableConverter {
         return $this->values;
     }
 
-    public function registerVariable($key, $fnSource, $fnsParams = null, array $properties = []) {
-        if ($fnsParams == null) {
-            $fnsParams = [];
-        } elseif (!is_array($fnsParams)) {
-            $fnsParams = [$fnsParams];
+    public function registerVariable($key, $fnSource, array $fnParams = [], array $properties = []) {
+        if (!is_callable($fnSource)) {
+            throw new Exception('$fnSource must be a callable');
         }
-        $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => $fnsParams];
+        if (!($fnSource instanceof Closure)) {
+            $fnSource = Closure::fromCallable($fnSource);
+        }
+        $fnSource = $fnSource->bindTo($this, $this);
+
+        foreach ($fnParams as $i => &$p) {
+            if (!is_callable($p)) {
+                throw new Exception('$fnParams['.$i.'] must be a callable');
+            }
+            if (!($p instanceof Closure)) {
+                $p = Closure::fromCallable($p);
+            }
+            $p = $p->bindTo($this, $this);
+        }
+
+        $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => $fnParams];
     }
 
-    public function registerCollectionVariable($key, $fnSource, $fnHandle, $fnsParams = null) {
-        if ($fnsParams == null) {
-            $fnsParams = [];
-        } elseif (!is_array($fnsParams)) {
-            $fnsParams = [$fnsParams];
+    public function registerCollectionVariable($key, $fnSource, $fnHandle, array $fnParams = []) {
+        if (!is_callable($fnSource)) {
+            throw new Exception('$fnSource must be a callable');
         }
-        $this->keys[$key] = ['collection' => true, 'fn_source' => $fnSource, 'properties' => [], 'fn_handle' => $fnHandle, 'fns_params' => $fnsParams];
+        if (!($fnSource instanceof Closure)) {
+            $fnSource = Closure::fromCallable($fnSource);
+        }
+        $fnSource = $fnSource->bindTo($this, $this);
+
+        foreach ($fnParams as $i => &$p) {
+            if (!is_callable($p)) {
+                throw new Exception('$fnParams['.$i.'] must be a callable');
+            }
+            if (!($p instanceof Closure)) {
+                $p = Closure::fromCallable($p);
+            }
+            $p = $p->bindTo($this, $this);
+        }
+
+        $this->keys[$key] = ['collection' => true, 'fn_source' => $fnSource, 'properties' => [], 'fn_handle' => $fnHandle, 'fns_params' => $fnParams];
     }
 
     public function unregisterVariable($key) {

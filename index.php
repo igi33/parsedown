@@ -100,20 +100,20 @@ $getIspravu = function() {
 };
 
 $datumParamFn = function ($datum, $format) {
-    if ($format) {
+    if (strtotime($datum) && $format) {
         return date($format, strtotime($datum));
     }
     return $datum;
 };
 
 $cenaParamFn = function ($iznos, $tip) {
-    if ($tip == 'iznos') {
+    if (is_numeric($iznos) && $tip == 'iznos') {
         return number_format($iznos, 2, ',', '.');
     }
     return $iznos;
 };
 
-$strankaFormatParamFn = function ($poverioci, array $propsToShowWithEm) {
+$strankaFormatParamFn = function ($stranke, array $propsToShowWithEm) {
     if (!empty($propsToShowWithEm)) {
         $propsToShow = [];
         $propsEms = [];
@@ -124,31 +124,36 @@ $strankaFormatParamFn = function ($poverioci, array $propsToShowWithEm) {
             $propsToShow[] = $key;
             $propsEms[$key] = $emMap;
         }
-
-        $properties = ['ime', 'adresa', 'maticni', 'jedinicaRacun', 'racun', 'advokat'];
+        
+        $properties = ['ime', 'adresa', 'maticni', 'jedinica', 'jedinicaRacun', 'jedinicaTip', 'postanskiBroj', 'racun', 'advokat', 'advokat2', 'advokatRacun', 'advokatSaRacunom',
+            'ulica', 'pttMesto', 'telefon', 'email', 'slanjeAdresa', 'slanjeMesto', 'slanjePtt', 'slanjePak', 'slanjeNaziv', 'mesto', 'trecaLica', 'rodjenDana'];
         $propsToHide = array_diff($properties, $propsToShow);
-        foreach ($poverioci as $i => &$pov) {
+        foreach ($stranke as $i => &$stranka) {
             foreach ($properties as $prop) {
-                $pov["print_$prop"] = !in_array($prop, $propsToHide);
-                $pov["ems_$prop"] = isset($propsEms[$prop]) ? $propsEms[$prop] : [];
+                $stranka["print_$prop"] = !in_array($prop, $propsToHide);
+                $stranka["ems_$prop"] = isset($propsEms[$prop]) ? $propsEms[$prop] : [];
             }
         }
     }
-    return $poverioci;
+    return $stranke;
 };
 
-$handleStranke = function(array $poverioci) {
+$handleStranke = function(array $stranke) {
     $pd = new Parsedown();
-    $properties = ['ime', 'adresa', 'maticni', 'jedinicaRacun', 'racun', 'advokat'];
+    $properties = ['ime', 'adresa', 'maticni', 'jedinica', 'jedinicaRacun', 'jedinicaTip', 'postanskiBroj', 'racun', 'advokat', 'advokat2', 'advokatRacun', 'advokatSaRacunom',
+        'ulica', 'pttMesto', 'telefon', 'email', 'slanjeAdresa', 'slanjeMesto', 'slanjePtt', 'slanjePak', 'slanjeNaziv', 'mesto', 'trecaLica', 'rodjenDana'];
     $text = '';
-    $num = count($poverioci);
-    foreach ($poverioci as $i => $pov) {
+    $num = count($stranke);
+    foreach ($stranke as $i => $stranka) {
         $p = false;
         foreach ($properties as $prop) {
-            if ((!isset($pov["print_$prop"]) || $pov["print_$prop"]) && $pov[$prop]) {
-                $text .= ($p ? ', ' : '');
-                $text .= $pd->insertEmphasisToSource($pov[$prop], isset($pov["ems_$prop"]) ? $pov["ems_$prop"] : []);
-                $p = true;
+            if (!isset($stranka["print_$prop"]) || $stranka["print_$prop"]) {
+                if ($stranka[$prop]) {
+                    $text .= $p ? ', ' : '';
+                    $text .= $pd->insertEmphasisToSource($stranka[$prop], isset($stranka["ems_$prop"]) ? $stranka["ems_$prop"] : []);
+                    $text = rtrim($text, ', ');
+                    $p = true;
+                }
             }
         }
         if ($i != $num - 1) {
@@ -383,7 +388,7 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 // tables.mdd
 // color.mdd
 // test.mdd
-$inputFileFull = 'zop_items_list.mdd';
+$inputFileFull = 'test.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
 // $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
@@ -397,5 +402,5 @@ $parsedown = new Parsedown($type);
 $parsedown->setVarConverter($varConverter);
 $parsedown->section($text);
 
-// $parsedown->generateFile($filename);
-$parsedown->generateDownload($filename);
+$parsedown->generateFile($filename);
+// $parsedown->generateDownload($filename);

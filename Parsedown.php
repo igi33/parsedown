@@ -3072,6 +3072,9 @@ class Parsedown
                 }
                 else
                 {
+                    if (strpos($text, '&') !== false) {
+                        $text = str_replace('&', '&amp;', $text);
+                    }
                     $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
                 }
             }
@@ -3734,6 +3737,15 @@ class Parsedown
     protected function getOdtParagraphStyle($key)
     {
         return isset($this->odtParagraphStyles[$key]) ? $this->odtParagraphStyles[$key] : null;
+    }
+
+    #
+    # Adds new ODT paragraph style to Parsedown
+    #
+
+    protected function addOdtParagraphStyle($pStyle)
+    {
+        $this->odtParagraphStyles[$pStyle->getStyleName()] = $pStyle;
     }
     
     #
