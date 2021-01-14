@@ -52,7 +52,8 @@ class Parsedown
     // properties used for keeping phpword internal state
     protected $phpWord;
     protected $section; // holds the current section object
-    protected $textRun; // holds the current textRun or listItemRun object
+    protected $textRun; // holds the current textRun object
+    protected $listItemRun; // holds the current listItemRun object
     protected $listStyleName;
     protected $cell;
 
@@ -272,6 +273,7 @@ class Parsedown
     {
         $this->fontName = 'Times New Roman';
         $this->textRun = null;
+        $this->listItemRun = null;
         $this->listStyleName = null;
         $this->cell = null;
         $this->section = null;
@@ -2776,7 +2778,7 @@ class Parsedown
             }
             elseif ($Element['name'] == 'li')
             {
-                $this->textRun = $this->section->addListItemRun($this->listDepth, $this->listStyleName);
+                $this->listItemRun = $this->section->addListItemRun($this->listDepth, $this->listStyleName);
             }
             elseif ($Element['name'] == 'hr')
             {
@@ -2784,7 +2786,11 @@ class Parsedown
             }
             elseif ($Element['name'] == 'br')
             {
-                if ($this->textRun != null)
+                if ($this->listItemRun != null)
+                {
+                    $this->listItemRun->addTextBreak();
+                }
+                elseif ($this->textRun != null)
                 {
                     $this->textRun->addTextBreak();
                 }
@@ -2996,9 +3002,31 @@ class Parsedown
                 }
                 elseif (in_array($Element['name'], array('ul', 'ol')))
                 {
-                    $this->textRun = null;
                     $this->listStyleName = $parentListStyle;
                     $this->listDepth -= 1;
+
+                    // needed in case there's text after last list item from variable
+                    if ($this->textRun) {
+                        if ($this->pStyle)
+                        {
+                            $pStyle = $this->pStyle;
+                        }
+                        else
+                        {
+                            switch ($this->paragraphDepth)
+                            {
+                                case 0: $pStyle = 'non_indented'; break;
+                                case 1: $pStyle = 'indented'; break;
+                                default: $pStyle = null;
+                            }
+                        }
+                        
+                        $this->textRun = $this->section->addTextRun($pStyle);
+                    }
+                }
+                elseif ($Element['name'] == 'li')
+                {
+                    $this->listItemRun = null;
                 }
                 elseif ($Element['name'] == 'blockquote')
                 {
@@ -3057,7 +3085,8 @@ class Parsedown
             {
                 if ($this->outputMode == self::TYPE_DOCX)
                 {
-                    $this->textRun->addTextBreak();
+                    $run = $this->listItemRun ? $this->listItemRun : $this->textRun;
+                    $run->addTextBreak();
                 }
                 else
                 {
@@ -3068,7 +3097,8 @@ class Parsedown
             {
                 if ($this->outputMode == self::TYPE_DOCX)
                 {
-                    $this->textRun->addText($text, $this->options);
+                    $run = $this->listItemRun ? $this->listItemRun : $this->textRun;
+                    $run->addText($text, $this->options);
                 }
                 else
                 {
