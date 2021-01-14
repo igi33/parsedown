@@ -3098,6 +3098,12 @@ class Parsedown
                 if ($this->outputMode == self::TYPE_DOCX)
                 {
                     $run = $this->listItemRun ? $this->listItemRun : $this->textRun;
+
+                    if (!$run)
+                    {
+                        throw new Exception("No text or list item run to add the following text to: '$text'");
+                    }
+
                     $run->addText($text, $this->options);
                 }
                 else
@@ -3105,6 +3111,12 @@ class Parsedown
                     if (strpos($text, '&') !== false) {
                         $text = str_replace('&', '&amp;', $text);
                     }
+
+                    if (!$this->p)
+                    {
+                        throw new Exception("No paragraph to add the following text to: '$text'");
+                    }
+
                     $this->p->addText($text, $this->wordOptionsToOdtTextStyle($this->options));
                 }
             }
