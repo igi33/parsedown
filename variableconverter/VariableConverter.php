@@ -43,18 +43,20 @@ class VariableConverter {
             throw new Exception('$fnSource must be a callable');
         }
         if (!($fnSource instanceof Closure)) {
-            $fnSource = Closure::fromCallable($fnSource);
+            $fnSource = function () use ($fnSource) { return $fnSource(); };
+            // $fnSource = Closure::fromCallable($fnSource); // PHP 7 >= 7.1.0
         }
         $fnSource = $fnSource->bindTo($this, $this);
 
         foreach ($fnParams as $i => &$p) {
-            if (!is_callable($p)) {
+            if (!is_callable($p['callable'])) {
                 throw new Exception('$fnParams['.$i.'] must be a callable');
             }
-            if (!($p instanceof Closure)) {
-                $p = Closure::fromCallable($p);
+            if (!($p['callable'] instanceof Closure)) {
+                $p['callable'] = function ($value, $args) use ($p) { return $p['callable']($value, $args); };
+                // $p['callable'] = Closure::fromCallable($p['callable']); // PHP 7 >= 7.1.0
             }
-            $p = $p->bindTo($this, $this);
+            $p['callable'] = $p['callable']->bindTo($this, $this);
         }
 
         $this->keys[$key] = ['collection' => false, 'fn_source' => $fnSource, 'properties' => $properties, 'fns_params' => $fnParams];
@@ -65,18 +67,20 @@ class VariableConverter {
             throw new Exception('$fnSource must be a callable');
         }
         if (!($fnSource instanceof Closure)) {
-            $fnSource = Closure::fromCallable($fnSource);
+            $fnSource = function () use ($fnSource) { return $fnSource(); };
+            // $fnSource = Closure::fromCallable($fnSource); // PHP 7 >= 7.1.0
         }
         $fnSource = $fnSource->bindTo($this, $this);
 
         foreach ($fnParams as $i => &$p) {
-            if (!is_callable($p)) {
+            if (!is_callable($p['callable'])) {
                 throw new Exception('$fnParams['.$i.'] must be a callable');
             }
-            if (!($p instanceof Closure)) {
-                $p = Closure::fromCallable($p);
+            if (!($p['callable'] instanceof Closure)) {
+                $p['callable'] = function ($value, $args) use ($p) { return $p['callable']($value, $args); };
+                // $p['callable'] = Closure::fromCallable($p['callable']); // PHP 7 >= 7.1.0
             }
-            $p = $p->bindTo($this, $this);
+            $p['callable'] = $p['callable']->bindTo($this, $this);
         }
 
         $this->keys[$key] = ['collection' => true, 'fn_source' => $fnSource, 'properties' => [], 'fn_handle' => $fnHandle, 'fns_params' => $fnParams];
@@ -137,13 +141,13 @@ class VariableConverter {
             }
         }
 
-        // optionally execute variable parameter functions
-        if ($params) {
-            foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
-                if (isset($params[$i])) {
-                    $value = $fnParam($value, count($params[$i]) == 1 ? $params[$i][0] : $params[$i]);
-                }
-            }
+        // execute variable parameter functions
+        foreach ($this->keys[$name]['fns_params'] as $i => $fnParam) {
+            $paramValue = $fnParam['default'];
+			if (isset($params[$i])) {
+			    $paramValue = count($params[$i]) == 1 ? $params[$i][0] : $params[$i];
+			}
+            $value = $fnParam['callable']($value, $paramValue);
         }
 
         // return value for non-collections or handled value for collections

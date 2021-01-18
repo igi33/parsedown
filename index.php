@@ -100,62 +100,102 @@ $getIspravu = function() {
 };
 
 $datumParamFn = function ($datum, $format) {
-    if (strtotime($datum) && $format) {
+    if ($format && strtotime($datum)) {
         return date($format, strtotime($datum));
     }
     return $datum;
 };
 
 $cenaParamFn = function ($iznos, $tip) {
-    if (is_numeric($iznos) && $tip == 'iznos') {
+    if ($tip == 'iznos' && is_numeric($iznos)) {
         return number_format($iznos, 2, ',', '.');
     }
     return $iznos;
 };
 
-$strankaFormatParamFn = function ($stranke, array $propsToShowWithEm) {
+$strankaFormatParamFn = function ($stranke, $propsToShowWithEm) {
     if (!empty($propsToShowWithEm)) {
         $propsToShow = [];
         $propsEms = [];
         $pd = new Parsedown();
         foreach ($propsToShowWithEm as $p) {
             $emMap = [];
-            $key = $pd->extractEmphasisFromSource($p, $emMap);
+            $key = $pd->extractEmphasisFromSource(trim($p), $emMap);
             $propsToShow[] = $key;
             $propsEms[$key] = $emMap;
         }
         
+        $properStranke = [];
+        
         $properties = ['ime', 'adresa', 'maticni', 'jedinica', 'jedinicaRacun', 'jedinicaTip', 'postanskiBroj', 'racun', 'advokat', 'advokat2', 'advokatRacun', 'advokatSaRacunom',
             'ulica', 'pttMesto', 'telefon', 'email', 'slanjeAdresa', 'slanjeMesto', 'slanjePtt', 'slanjePak', 'slanjeNaziv', 'mesto', 'trecaLica', 'rodjenDana'];
         $propsToHide = array_diff($properties, $propsToShow);
-        foreach ($stranke as $i => &$stranka) {
-            foreach ($properties as $prop) {
-                $stranka["print_$prop"] = !in_array($prop, $propsToHide);
-                $stranka["ems_$prop"] = isset($propsEms[$prop]) ? $propsEms[$prop] : [];
+        
+        foreach ($stranke as $i => $stranka) {
+            $strankaInfo = [];
+            
+            if (in_array('racun', $propsToShow) && !in_array('jedinicaRacun', $propsToShow)) {
+                $strankaInfo['jedinicaRacun'] = $stranka['jedinicaRacun'];
             }
+            if (in_array('jedinica', $propsToShow) && !in_array('jedinicaTip', $propsToShow)) {
+                $strankaInfo['jedinicaTip'] = $stranka['jedinicaTip'];
+            }
+            
+            foreach ($propsToShow as $prop) {
+                $strankaInfo[$prop] = $stranka[$prop];
+                $strankaInfo["print_$prop"] = true;
+                $strankaInfo["ems_$prop"] = isset($propsEms[$prop]) ? $propsEms[$prop] : [];
+            }
+            $properStranke[] = $strankaInfo;
         }
+        
+        $properStranke['propsToShow'] = $propsToShow;
+        
+        return $properStranke;
     }
     return $stranke;
 };
 
-$handleStranke = function(array $stranke) {
-    $pd = new Parsedown();
-    $properties = ['ime', 'adresa', 'maticni', 'jedinica', 'jedinicaRacun', 'jedinicaTip', 'postanskiBroj', 'racun', 'advokat', 'advokat2', 'advokatRacun', 'advokatSaRacunom',
-        'ulica', 'pttMesto', 'telefon', 'email', 'slanjeAdresa', 'slanjeMesto', 'slanjePtt', 'slanjePak', 'slanjeNaziv', 'mesto', 'trecaLica', 'rodjenDana'];
+$printStranke = function(array $stranke) {
     $text = '';
+    $pd = new Parsedown();
+    
+    $propsToShow = [];
+    if (isset($stranke['propsToShow'])) {
+        $propsToShow = $stranke['propsToShow'];
+        unset($stranke['propsToShow']);
+    }
+    
     $num = count($stranke);
     foreach ($stranke as $i => $stranka) {
         $p = false;
-        foreach ($properties as $prop) {
+        
+        foreach ($propsToShow as $prop) {
             if (!isset($stranka["print_$prop"]) || $stranka["print_$prop"]) {
                 if ($stranka[$prop]) {
+                    $textToAdd = $stranka[$prop];
+                    
                     $text .= $p ? ', ' : '';
-                    $text .= $pd->insertEmphasisToSource($stranka[$prop], isset($stranka["ems_$prop"]) ? $stranka["ems_$prop"] : []);
+                    if ($prop == 'jedinica') {
+                        switch ($stranka['jedinicaTip']) {
+                            case 1: $textToAdd = "(пословна јединица " . $stranka['jedinica'] . ")"; break;
+                            case 2: $textToAdd = "(огранак " . $stranka['jedinica'] . ")"; break;
+                            case 3: $textToAdd = "(представништво " . $stranka['jedinica'] . ")"; break;
+                        }
+                    } elseif ($prop == 'racun') {
+                        if ($stranka['jedinicaRacun']) {
+                            $textToAdd = $stranka['jedinicaRacun'];
+                        } else {
+                            $textToAdd = $stranka['racun'];
+                        }
+                    }
+                    $text .= $pd->insertEmphasisToSource($textToAdd, isset($stranka["ems_$prop"]) ? $stranka["ems_$prop"] : []);
                     $text = rtrim($text, ', ');
                     $p = true;
                 }
             }
         }
+        
         if ($i != $num - 1) {
             $text .= $p ? ', ' : '';
         }
@@ -300,7 +340,7 @@ $getStavke = function() {
     return $stavke;
 };
 
-$handleStavke = function(array $stavke) {
+$printStavke = function(array $stavke) {
     // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
     $num = count($stavke);
     $text = '';
@@ -318,7 +358,7 @@ $handleStavke = function(array $stavke) {
     return $text;
 };
 
-$handleStavkeList = function(array $stavke) {
+$printStavkeList = function(array $stavke) {
     // на име накнаде за припрему, вођење и архивирање предмета износ од 1.728,00 динара (1.440,00 дин. + 288,00 дин на име 20% ПДВ-а),
     $num = count($stavke);
     $text = '';
@@ -344,20 +384,24 @@ $getPodrucje = function () {
 // ~~~~~~~~~~~~~ DB END ~~~~~~~~~~~~~
 
 $varConverter = new VariableConverter();
-$varConverter->registerVariable('izvrsitelj', $getIzvrsitelj, [$textcaseParamFn]);
+$varConverter->registerVariable('izvrsitelj', $getIzvrsitelj, [['callable' => $textcaseParamFn, 'default' => null]]);
 $varConverter->registerVariable('podrucjeImenovanja', $getPodrucje);
 $varConverter->registerVariable('oznaka', $getOznaka);
-$varConverter->registerVariable('kancelarija', $getKancelarija, [], ['naziv', 'adresa', 'mesto', 'tel1', 'tel2', 'tel3', 'pib', 'maticni_broj']);
-$varConverter->registerVariable('predmet', $getPredmet, [$datumParamFn], ['identifikacioni_broj', 'datum_prijema', 'broj_izvrsne_verodostojne_isprave']);
-$varConverter->registerVariable('datumZop', $getDatumZop, [$datumParamFn]);
-$varConverter->registerCollectionVariable('poverioci', $getPoverioci, $handleStranke, [$strankaFormatParamFn]);
-$varConverter->registerCollectionVariable('duznici', $getDuznici, $handleStranke, [$strankaFormatParamFn]);
-$varConverter->registerVariable('iznosPredujma', $getIznosPredujma, [$cenaParamFn]);
-$varConverter->registerVariable('redovni', $getRedovni, [], ['broj_racuna', 'naziv_banke']);
+$varConverter->registerVariable('kancelarija', $getKancelarija);
+$varConverter->registerVariable('predmet', $getPredmet, [['callable' => $datumParamFn, 'default' => 'd.m.Y.']]);
+$varConverter->registerVariable('datumZop', $getDatumZop, [['callable' => $datumParamFn, 'default' => 'd.m.Y.']]);
+$varConverter->registerCollectionVariable('poverioci', $getPoverioci, $printStranke, [
+    ['callable' => $strankaFormatParamFn, 'default' => ['**ime**', 'adresa', 'maticni', 'racun', 'advokat']],
+]);
+$varConverter->registerCollectionVariable('duznici', $getDuznici, $printStranke, [
+    ['callable' => $strankaFormatParamFn, 'default' => ['**ime**', 'adresa', 'maticni', 'racun', 'advokat']],
+]);
+$varConverter->registerVariable('iznosPredujma', $getIznosPredujma, [['callable' => $cenaParamFn, 'default' => 'iznos']]);
+$varConverter->registerVariable('redovni', $getRedovni);
 $varConverter->registerVariable('pozivNaBroj', $getPozivNaBroj);
 $varConverter->registerVariable('ispravu', $getIspravu);
-$varConverter->registerCollectionVariable('stavkePredujmaInline', $getStavke, $handleStavke);
-$varConverter->registerCollectionVariable('stavkePredujmaList', $getStavke, $handleStavkeList);
+$varConverter->registerCollectionVariable('stavkePredujmaInline', $getStavke, $printStavke);
+$varConverter->registerCollectionVariable('stavkePredujmaList', $getStavke, $printStavkeList);
 
 /*
 
