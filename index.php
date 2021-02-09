@@ -435,7 +435,6 @@ echo $varConverter->evaluate('poverioci', ['print' => ['ime', 'adresa']])."\n";
 $inputFileFull = 'test.mdd';
 $inputFile = explode('.', $inputFileFull)[0];
 $text = file_get_contents('input/'.$inputFileFull, FILE_USE_INCLUDE_PATH);
-// $text = '**_ЈКП "ПАРКИНГ СЕРВИС" НОВИ САД_**, Нови Сад, ул. Филипа Вишњића бр. 47, **_ЈКП "ПАРКИНГ СЕРВИС" НИШ_**, НИШ, ул. Генерала Милојка Лешјанина';
 $filename = "output/".time()."_$inputFile";
 
 // $type = Parsedown::TYPE_HTML;

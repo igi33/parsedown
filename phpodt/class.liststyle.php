@@ -79,6 +79,7 @@ class ListStyle extends ContentAutoStyle {
 				case StyleConstants::CHECK_MARK:
 				case StyleConstants::RIGHT_ARROW:
 				case StyleConstants::RIGHT_ARROWHEAD:
+				case StyleConstants::HYPHEN:
 					$this->levels[$level]->setAttribute('text:bullet-char',	$bulletChar);break;
 				default: 
 					throw new StyleException('Invalid bullet character value');

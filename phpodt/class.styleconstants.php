@@ -98,6 +98,7 @@ class StyleConstants {
 	const NO_WRAP = 69;
 	
 	const BULLET = '&#x2022;';
+	const HYPHEN = '&#x2d;';
 	const BLACK_CIRCLE = '&#x25CF;';
 	const CHECK_MARK = '&#x2714;';
 	const BALLOT_X = '&#x2717;';
