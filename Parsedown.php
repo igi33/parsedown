@@ -75,6 +75,8 @@ class Parsedown
     protected $odtFinishedListItems;
     protected $tableRows;
     protected $pageBreakBefore;
+    protected $odtBaseTextStyleNames;
+    protected $tableCellStylesMap;
 
     // properties used for keeping html internal state
     protected $markup = '';
@@ -128,6 +130,7 @@ class Parsedown
         $this->tableRows = null;
         $this->pageBreakBefore = false;
         $this->odtBaseTextStyleNames = array();
+        $this->tableCellStylesMap = null;
 
         $defaultTextStyle = new TextStyle('default');
         $defaultTextStyle->setFontName($this->fontName);
@@ -421,20 +424,12 @@ class Parsedown
     }
     
     #
-    # Get section
+    # Get PhpWord section
     #
     
     public function getSection()
     {
-        if ($this->outputMode == self::TYPE_DOCX) {
-            return $this->section;
-        }
-        elseif ($this->outputMode == self::TYPE_ODT)
-        {
-            return $this->odt;
-        }
-        
-        return null;
+        return $this->section;
     }
 
     #
@@ -731,7 +726,7 @@ class Parsedown
         }
 
         if ($this->outputMode == self::TYPE_ODT)
-        {
+        {            
             if ($this->pageBreakBefore)
             {
                 new Paragraph($this->getOdtParagraphStyle('new_page'));
@@ -749,7 +744,7 @@ class Parsedown
             $this->sectionIdx += 1;
             $this->phpWord->addNumberingStyle('roman'.$this->sectionIdx, $this->romanNumberingStyle);
             $this->phpWord->addNumberingStyle('decimal'.$this->sectionIdx, $this->decimalNumberingStyle);
-            
+
             $this->setPhpWordMargins();
             $this->elementsDocx($Elements);
         }
@@ -1735,7 +1730,7 @@ class Parsedown
 
         $alignments = array();
         $widths = array();
-        $specifiedWidths = false;
+        $areWidthsSpecified = false;
 
         $divider = $Line['text'];
 
@@ -1772,7 +1767,7 @@ class Parsedown
             if (isset($matches[0]))
             {
                 $width = $matches[0];
-                $specifiedWidths = true;
+                $areWidthsSpecified = true;
             }
 
             $widths[] = $width;
@@ -1802,21 +1797,25 @@ class Parsedown
                 
                 foreach ($options as $option)
                 {
-                    if (strpos($option, '=') !== false)
+                    // The style string is guaranteed to contain
+                    // the symbol '='because of the matching regex.
+                    list($prop, $val) = array_map('trim', explode('=', $option));
+                    
+                    if (!in_array($prop, $this->availableTableStyles))
                     {
-                        list($prop, $val) = array_map('trim', explode('=', $option));
-                        
-                        if (in_array($prop, $this->availableTableStyles) && $val)
-                        {
-                            if ($prop === 'bgColor')
-                            {
-                                $bgColor = $val;
-                            }
-                            else
-                            {
-                                $tableStyles[$prop] = $val;
-                            }
-                        }
+                        throw new Exception("Unsupported table style '$prop'");
+                    }
+                    
+                    // Save bgColor separately from other table styles.
+                    // This is because, for some reason, this property won't work 
+                    // as a DOCX table style if unit and width are also set.
+                    if ($prop === 'bgColor')
+                    {
+                        $bgColor = $val;
+                    }
+                    else
+                    {
+                        $tableStyles[$prop] = $val;
                     }
                 }
                 $header = str_replace($tblOptionMatches[0][$i], '', $header);
@@ -1844,9 +1843,9 @@ class Parsedown
 
             $HeaderElement = array(
                 'name' => 'th',
-                'width' => $widths[$index],
-                'alignment' => $alignments[$index],
-                'bgColor' => $bgColor,
+                'column_alignment' => $alignments[$index],
+                'column_width' => $widths[$index],
+                'table_bg_color' => $bgColor,
                 'table_styles' => $tableStyles,
                 'handler' => array(
                     'function' => 'lineElements',
@@ -1877,16 +1876,16 @@ class Parsedown
         # ~
 
         $Block = array(
-            'alignments' => $alignments,
-            'widths' => $widths,
-            'bgColor' => $bgColor,
+            'column_alignments' => $alignments,
+            'column_widths' => $widths,
+            'table_bg_color' => $bgColor,
             'table_styles' => $tableStyles,
             'identified' => true,
             'element' => array(
                 'name' => 'table',
-                'widths' => $widths,
-                'specified_widths' => $specifiedWidths,
-                'bgColor' => $bgColor,
+                'are_widths_specified' => $areWidthsSpecified,
+                'column_widths' => $widths,
+                'bg_color' => $bgColor,
                 'row_num' => $headerRowHasText ? 1 : 0,
                 'column_num' => count($headerCells),
                 'elements' => array(),
@@ -1918,7 +1917,7 @@ class Parsedown
             return;
         }
 
-        if (count($Block['alignments']) === 1 or $Line['text'][0] === '|' or strpos($Line['text'], '|'))
+        if (count($Block['column_alignments']) === 1 or $Line['text'][0] === '|' or strpos($Line['text'], '|'))
         {
             $Elements = array();
 
@@ -1933,7 +1932,7 @@ class Parsedown
 
             preg_match_all('/(?:(\\\\[|])|[^|`]|`[^`]++`|`)++/', $row, $matches);
 
-            $cells = array_slice($matches[0], 0, count($Block['alignments']));
+            $cells = array_slice($matches[0], 0, count($Block['column_alignments']));
 
             foreach ($cells as $index => $cell)
             {
@@ -1941,25 +1940,26 @@ class Parsedown
                 
                 // extract cell styles from cell text
                 $cellStyles = array();
-                if (preg_match_all($this->StyleOptionsRegexAnywhere, $cell, $cellOptionMatches))
+                if (preg_match_all($this->StyleOptionsRegexAnywhere, $cell, $cellStyleMatches))
                 {
-                    foreach ($cellOptionMatches[1] as $i => $optionListText)
+                    foreach ($cellStyleMatches[1] as $i => $styleListText)
                     {
-                        $options = array_map('trim', explode(',', $optionListText));
+                        $styles = array_map('trim', explode(',', $styleListText));
                         
-                        foreach ($options as $option)
+                        foreach ($styles as $style)
                         {
-                            if (strpos($option, '=') !== false)
+                            // The style string is guaranteed to contain
+                            // the symbol '='because of the matching regex.
+                            list($prop, $val) = array_map('trim', explode('=', $style));
+                            
+                            if (!in_array($prop, $this->availableCellStyles))
                             {
-                                list($prop, $val) = array_map('trim', explode('=', $option));
-                                
-                                if (in_array($prop, $this->availableCellStyles) && $val)
-                                {
-                                    $cellStyles[$prop] = $val;
-                                }
+                                throw new Exception("Unsupported table cell style '$prop'");
                             }
+                            
+                            $cellStyles[$prop] = $val;
                         }
-                        $cell = str_replace($cellOptionMatches[0][$i], '', $cell);
+                        $cell = str_replace($cellStyleMatches[0][$i], '', $cell);
                     }
                 }
                 
@@ -1968,11 +1968,11 @@ class Parsedown
 
                 $Element = array(
                     'name' => 'td',
-                    'width' => $Block['widths'][$index],
-                    'alignment' => $Block['alignments'][$index],
-                    'bgColor' => $Block['bgColor'],
-                    'cell_styles' => $cellStyles,
+                    'column_alignment' => $Block['column_alignments'][$index],
+                    'column_width' => $Block['column_widths'][$index],
+                    'table_bg_color' => $Block['table_bg_color'],
                     'table_styles' => $Block['table_styles'],
+                    'cell_styles' => $cellStyles,
                     'handler' => array(
                         'function' => 'lineElements',
                         'argument' => $cell,
@@ -1980,17 +1980,17 @@ class Parsedown
                     )
                 );
 
-                if (isset($Block['alignments'][$index]) || isset($Block['widths'][$index]))
+                if (isset($Block['column_alignments'][$index]) || isset($Block['column_widths'][$index]))
                 {
                     $Element['attributes']['style'] = '';
-                    if (isset($Block['alignments'][$index]))
+                    if (isset($Block['column_alignments'][$index]))
                     {
-                        $Element['attributes']['style'] .= 'text-align: ' . $Block['alignments'][$index] . ';';
+                        $Element['attributes']['style'] .= 'text-align: ' . $Block['column_alignments'][$index] . ';';
                     }
     
-                    if (isset($Block['widths'][$index]))
+                    if (isset($Block['column_widths'][$index]))
                     {
-                        $Element['attributes']['style'] .= 'width: ' . \PhpOffice\PhpWord\Shared\Converter::cmToPixel($Block['widths'][$index]) . 'px;';
+                        $Element['attributes']['style'] .= 'width: ' . \PhpOffice\PhpWord\Shared\Converter::cmToPixel($Block['column_widths'][$index]) . 'px;';
                     }
                 }
 
@@ -3087,7 +3087,7 @@ class Parsedown
             elseif ($Element['name'] == 'table')
             {
                 $tableStyle = $Element['table_styles'];
-                if (!$Element['specified_widths'])
+                if (!$Element['are_widths_specified'])
                 {
                     // if column widths not specified, set the table width to 100%
                     $tableStyle['unit'] = \PhpOffice\PhpWord\SimpleType\TblWidth::PERCENT;
@@ -3131,35 +3131,49 @@ class Parsedown
             }
             elseif (in_array($Element['name'], array('td', 'th')))
             {
-                if (isset($Element['alignment']))
-                {
-                    $parentPStyleCell = $this->pStyleCell;
-                    switch ($Element['alignment'])
-                    {
-                        case 'left': $this->pStyleCell = 'left_aligned'; break;
-                        case 'right': $this->pStyleCell = 'right_aligned'; break;
-                        case 'center': $this->pStyleCell = 'center_aligned'; break;
-                    }
-                }
-
                 // Create cell only if row exists.
                 // Row won't exist if no table header text supplied.
                 // Also skip cell creation if colSpan is in effect.
                 if ($this->row)
                 {
+                    $this->addTextToCell = false;
+                    
                     if ($this->currentColSpan == 0)
                     {
-                        $cellWidth = isset($Element['width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['width']) : null;
-                        
                         $cellStyle = array();
                         if ($Element['name'] === 'td')
                         {
                             $cellStyle = $Element['cell_styles'];
                         }
                         
-                        if (isset($Element['bgColor']))
+                        // set cell alignment
+                        $alignment = 'left';
+                        if (isset($Element['column_alignment']) || isset($cellStyle['textAlignment']))
                         {
-                            $cellStyle['bgColor'] = $Element['bgColor'];
+                            if (isset($cellStyle['textAlignment']))
+                            {
+                                $alignment = $cellStyle['textAlignment'];
+                            }
+                            else
+                            {
+                                // column alignment as fallback
+                                $alignment = $Element['column_alignment'];
+                            }
+                        }
+                        switch ($alignment)
+                        {
+                            case 'left': $this->pStyleCell = 'left_aligned'; break;
+                            case 'right': $this->pStyleCell = 'right_aligned'; break;
+                            case 'center': $this->pStyleCell = 'center_aligned'; break;
+                        }
+                        
+                        // set cell width
+                        $cellWidth = isset($Element['column_width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['column_width']) : null;
+                        
+                        // set cell background color to table background color as fallback if exists
+                        if (!isset($cellStyle['bgColor']) && isset($Element['table_bg_color']))
+                        {
+                            $cellStyle['bgColor'] = $Element['table_bg_color'];
                         }
                         
                         if (isset($cellStyle['gridSpan']))
@@ -3170,10 +3184,6 @@ class Parsedown
                         $this->cell = $this->row->addCell($cellWidth, $cellStyle);
                         $this->textRun = $this->cell->addTextRun($this->pStyleCell);
                         $this->addTextToCell = true;
-                    }
-                    else
-                    {
-                        $this->addTextToCell = false;
                     }
                 }
             }
@@ -3339,20 +3349,21 @@ class Parsedown
                 }
                 elseif (in_array($Element['name'], array('td', 'th')))
                 {
-                    if (isset($Element['alignment']))
+                    if ($this->row)
                     {
-                        $this->pStyleCell = $parentPStyleCell;
+                        if ($this->addTextToCell)
+                        {
+                            $this->cell = null;
+                            $this->textRun = null;
+                            $this->pStyleCell = null;
+                            $this->addTextToCell = null;
+                        }
+                        
+                        if ($this->currentColSpan > 0)
+                        {
+                            $this->currentColSpan -= 1;
+                        }
                     }
-
-                    $this->cell = null;
-                    $this->textRun = null;
-                    
-                    if ($this->currentColSpan > 0)
-                    {
-                        $this->currentColSpan -= 1;
-                    }
-                    
-                    $this->addTextToCell = null;
                 }
                 elseif (in_array($Element['name'], array('thead', 'tbody')))
                 {
@@ -3624,50 +3635,51 @@ class Parsedown
             }
             elseif ($Element['name'] == 'table')
             {
-                $tableStyles = $Element['table_styles'];
+                $tableStyle = $Element['table_styles'];
+                $this->tableCellStylesMap = array();
                 
                 $rndString = self::randomString(5); // random 5 char string
                 $this->table = new Table($rndString);
                 $this->table->createColumns($Element['column_num']);
                 
-                $tableStyle = new TableStyle($this->table->getTableName());
-                $tableStyle->setBorderModel(StyleConstants::COLLAPSING);
+                $odtTableStyle = new TableStyle($this->table->getTableName());
+                $odtTableStyle->setBorderModel(StyleConstants::COLLAPSING);
                 
-                if ($Element['specified_widths'])
+                if ($Element['are_widths_specified'])
                 {
                     $total = 0;
                     for ($i = 0; $i < $Element['column_num']; ++$i)
                     {
-                        if ($Element['widths'][$i])
+                        if ($Element['column_widths'][$i])
                         {
-                            $total += $Element['widths'][$i];
-                            $this->table->getColumnStyle($i)->setWidth($Element['widths'][$i].'cm');
+                            $total += $Element['column_widths'][$i];
+                            $this->table->getColumnStyle($i)->setWidth($Element['column_widths'][$i].'cm');
                         }
                     }
 
                     $alignment = StyleConstants::LEFT;
-                    if (isset($tableStyles['alignment']))
+                    if (isset($tableStyle['alignment']))
                     {
-                        if ($tableStyles['alignment'] === 'center')
+                        if ($tableStyle['alignment'] === 'center')
                         {
                             $alignment = StyleConstants::CENTER;
                         }
-                        elseif ($tableStyles['alignment'] === 'end')
+                        elseif ($tableStyle['alignment'] === 'end')
                         {
                             $alignment = StyleConstants::RIGHT;
                         }
                     }
                     
-                    $tableStyle->setWidth($total.'cm');
-                    $tableStyle->setAlignment($alignment);
+                    $odtTableStyle->setWidth($total.'cm');
+                    $odtTableStyle->setAlignment($alignment);
                 }
                 
-                if ($Element['bgColor'])
+                if ($Element['bg_color'])
                 {
-                    $tableStyle->setBgColor('#'.$Element['bgColor']);
+                    $odtTableStyle->setBgColor('#'.$Element['bg_color']);
                 }
                 
-                $this->table->setStyle($tableStyle);
+                $this->table->setStyle($odtTableStyle);
 
                 $this->tableRows = array();
             }
@@ -3696,19 +3708,61 @@ class Parsedown
             }
             elseif (in_array($Element['name'], array('td', 'th')))
             {
-                if (isset($Element['alignment']))
+                if (is_array($this->row))
                 {
-                    $parentPStyleCell = $this->pStyleCell;
-                    switch ($Element['alignment'])
+                    $cellStyle = array();
+                    if ($Element['name'] === 'td')
+                    {
+                        $cellStyle = $Element['cell_styles'];
+                    }
+                    
+                    // set cell alignment
+                    $alignment = 'left';
+                    if (isset($Element['column_alignment']) || isset($cellStyle['textAlignment']))
+                    {
+                        if (isset($cellStyle['textAlignment']))
+                        {
+                            $alignment = $cellStyle['textAlignment'];
+                        }
+                        else
+                        {
+                            // column alignment as fallback
+                            $alignment = $Element['column_alignment'];
+                        }
+                    }
+                    switch ($alignment)
                     {
                         case 'left': $this->pStyleCell = 'left_aligned'; break;
                         case 'right': $this->pStyleCell = 'right_aligned'; break;
                         case 'center': $this->pStyleCell = 'center_aligned'; break;
                     }
-                }
-
-                if (is_array($this->row))
-                {
+                    
+                    // Save cell styles temporarily.
+                    // They will be applied when table ends.
+                    $cellStyleValues = array();
+                    
+                    $n = count($this->tableRows);
+                    $m = count($this->row);
+                    
+                    // save cell background color
+                    if (isset($cellStyle['bgColor']))
+                    {
+                        $cellStyleValues['bgColor'] = '#'.$cellStyle['bgColor'];
+                    }
+                    
+                    // save vertical align
+                    $valign = StyleConstants::TOP;
+                    if (isset($cellStyle['valign']))
+                    {
+                        switch ($cellStyle['valign'])
+                        {
+                            case 'center': $valign = StyleConstants::CENTER; break;
+                            case 'bottom': $valign = StyleConstants::BOTTOM; break;
+                        }
+                    }
+                    $cellStyleValues['valign'] = $valign;
+                    
+                    $this->tableCellStylesMap[$n][$m] = $cellStyleValues;
                     $this->p = new Paragraph($this->getOdtParagraphStyle($this->pStyleCell));
                 }
             }
@@ -3941,6 +3995,7 @@ class Parsedown
                         {
                             $cellStyle = $this->table->getCellStyle($j, $i);
                             
+                            // set cell border
                             if (isset($Element['table_styles']['borderSize']))
                             {
                                 $borderColor = '000000';
@@ -3953,13 +4008,26 @@ class Parsedown
                                 $cellStyle->setBorder('#'.$borderColor, StyleConstants::SOLID, $borderSizePt.'pt');
                             }
                             
+                            // set cell padding (even though it's called margin)
                             if (isset($Element['table_styles']['cellMargin']))
                             {
                                 $cellStyle->setPadding($Element['table_styles']['cellMargin'].'cm');
                             }
+                            
+                            $cellValues = $this->tableCellStylesMap[$i][$j];
+                            
+                            // set cell background color
+                            if (isset($cellValues['bgColor']))
+                            {
+                                $cellStyle->setBgColor($cellValues['bgColor']);
+                            }
+                            
+                            // set vertical align
+                            $cellStyle->setVerticalAlign($cellValues['valign']);
                         }
                     }
                     
+                    $this->tableCellStylesMap = null;
                     $this->tableRows = null;
                     $this->table = null;
                 }
@@ -3974,10 +4042,7 @@ class Parsedown
                 }
                 elseif (in_array($Element['name'], array('td', 'th')))
                 {
-                    if (isset($Element['alignment']))
-                    {
-                        $this->pStyleCell = $parentPStyleCell;
-                    }
+                    $this->pStyleCell = null;
 
                     if (is_array($this->row))
                     {
@@ -4487,6 +4552,6 @@ class Parsedown
     );
     
     protected $availableCellStyles = array(
-        'gridSpan',
+        'gridSpan', 'bgColor', 'textAlignment', 'valign',
     );
 }
