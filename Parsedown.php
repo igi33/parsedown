@@ -3167,8 +3167,20 @@ class Parsedown
                             case 'center': $this->pStyleCell = 'center_aligned'; break;
                         }
                         
-                        // set cell width
-                        $cellWidth = isset($Element['column_width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['column_width']) : null;
+                        // Set cell width.
+                        // Original solution:
+                        // In cases when column width is not specified,
+                        // set cell width to null (default value) when creating the table cell,
+                        // so the width is determined automatically.
+                        // DOCX files generated this way opened correctly in MS Word,
+                        // but LibreOffice reported an error when trying to open them.
+                        // $cellWidth = isset($Element['column_width']) ? \PhpOffice\PhpWord\Shared\Converter::cmToTwip($Element['column_width']) : null;
+
+                        // Alternative solution (workaround):
+                        // In those cases, instead of setting the cell width to null,
+                        // set it to any positive number.
+                        $cellWidth = isset($Element['column_width']) ? $Element['column_width'] : 5;
+                        $cellWidth = \PhpOffice\PhpWord\Shared\Converter::cmToTwip($cellWidth);
                         
                         // set cell background color to table background color as fallback if exists
                         if (!isset($cellStyle['bgColor']) && isset($Element['table_bg_color']))
